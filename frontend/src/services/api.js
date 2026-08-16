@@ -1,0 +1,85 @@
+import axios from 'axios';
+
+const API_BASE = '/api';
+
+const api = axios.create({
+  baseURL: API_BASE,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Interceptor to inject JWT token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, (error) => Promise.reject(error));
+
+export const authAPI = {
+  login: (email, password) => api.post('/auth/login', { email, password }),
+  checkGoogleEmail: (email) => api.post('/auth/google-check-email', { email }),
+  googleLogin: (email, fullName = 'Google User', role = 'Faculty', department = 'Computer Science & Engineering', token = null) =>
+    api.post('/auth/google-login', { email, full_name: fullName, role, department, token }),
+  register: (userData) => api.post('/auth/register', userData),
+  createUser: (userData) => api.post('/auth/users/create', userData),
+  getMe: () => api.get('/auth/me'),
+  listUsers: () => api.get('/auth/users'),
+  updateUserRole: (userId, role, isActive = true) => api.post('/auth/users/update-role', { user_id: userId, role, is_active: isActive }),
+};
+
+
+
+export const documentAPI = {
+  upload: (formData) => api.post('/documents/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  list: (subCriterion = 'All', validationStatus = 'All') => api.get(`/documents?sub_criterion=${subCriterion}&validation_status=${validationStatus}`),
+  validateHod: (id) => api.post(`/documents/${id}/validate-hod`),
+  rejectHod: (id, rejection_reason) => api.post(`/documents/${id}/reject-hod`, { rejection_reason }),
+  validatePrincipal: (id) => api.post(`/documents/${id}/validate-principal`),
+  rejectPrincipal: (id, rejection_reason) => api.post(`/documents/${id}/reject-principal`, { rejection_reason }),
+  delete: (id) => api.delete(`/documents/${id}`),
+  searchRag: (query, subCriterion = 'All') => api.post('/documents/search', { query, sub_criterion: subCriterion }),
+};
+
+
+export const criterionAPI = {
+  getAnalyses: () => api.get('/criterion/analyses'),
+  getSubDetail: (code) => api.get(`/criterion/sub-criterion/${code}`),
+  getGaps: (subCriterion = 'All') => api.get(`/criterion/gaps?sub_criterion=${subCriterion}`),
+  updateGapStatus: (gapId, status) => api.patch(`/criterion/gaps/${gapId}/status`, { status }),
+  getRecommendations: (subCriterion = 'All') => api.get(`/criterion/recommendations?sub_criterion=${subCriterion}`),
+  reanalyze: () => api.post('/criterion/reanalyze'),
+};
+
+export const analyticsAPI = {
+  getOverview: () => api.get('/analytics/overview'),
+  getShapExplanation: (subCriterion) => api.get(`/analytics/shap-explanation/${subCriterion}`),
+};
+
+export const metricsAPI = {
+  getEvidenceMatrix: (subCriterion = 'All') => api.get(`/metrics/matrix?sub_criterion=${subCriterion}`),
+  getMetricDetail: (metricId) => api.get(`/metrics/${metricId}`),
+  findMissingEvidence: () => api.post('/metrics/missing-evidence'),
+  overrideMetricStatus: (metricId, newStatus, overrideReason) => 
+    api.post(`/metrics/${metricId}/override`, { new_status: newStatus, override_reason: overrideReason }),
+};
+
+export const reportAPI = {
+  downloadPdf: (institutionName) => {
+    return api.get(`/reports/download-pdf?institution=${encodeURIComponent(institutionName)}`, {
+      responseType: 'blob'
+    });
+  },
+  downloadCsv: (institutionName) => {
+    return api.get(`/reports/download-csv?institution=${encodeURIComponent(institutionName)}`, {
+      responseType: 'blob'
+    });
+  }
+};
+
+
+export default api;

@@ -1,0 +1,65 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authAPI } from '../services/api';
+
+const AuthContext = createContext();
+
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const res = await authAPI.getMe();
+          setUser(res.data);
+        } catch (err) {
+          console.error("Session expired or invalid token:", err);
+          localStorage.removeItem('token');
+        }
+      }
+      setLoading(false);
+    };
+    initAuth();
+  }, []);
+
+  const login = async (email, password) => {
+    const res = await authAPI.login(email, password);
+    localStorage.setItem('token', res.data.access_token);
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
+  const register = async (userData) => {
+    const res = await authAPI.register(userData);
+    localStorage.setItem('token', res.data.access_token);
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
+  const googleLogin = async (email, fullName, role = 'Faculty', department = 'Computer Science & Engineering', token = null) => {
+    const res = await authAPI.googleLogin(email, fullName, role, department, token);
+    localStorage.setItem('token', res.data.access_token);
+    setUser(res.data.user);
+    return res.data.user;
+  };
+
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.clear();
+    sessionStorage.clear();
+    setUser(null);
+  };
+
+
+  return (
+    <AuthContext.Provider value={{ user, loading, login, googleLogin, register, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+
+};
+
+export const useAuth = () => useContext(AuthContext);
