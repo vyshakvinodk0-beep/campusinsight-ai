@@ -76,6 +76,7 @@ class RagQueryRequest(BaseModel):
     query: str
     sub_criterion: Optional[str] = "All"
     top_k: int = 4
+    doc_id: Optional[int] = None
 
 class RagQueryResult(BaseModel):
     answer: str

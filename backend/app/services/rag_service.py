@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from app.services.vector_store import vector_store_service
 from app.core.config import settings
 
@@ -7,11 +7,11 @@ logger = logging.getLogger("rag_service")
 
 class RagService:
     @staticmethod
-    def answer_query(query: str, sub_criterion: str = "All", top_k: int = 4) -> Dict[str, Any]:
+    def answer_query(query: str, sub_criterion: str = "All", top_k: int = 4, doc_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Retrieves relevant Criterion 1 document chunks and synthesizes an answer.
         """
-        chunks = vector_store_service.search(query=query, sub_criterion=sub_criterion, top_k=top_k)
+        chunks = vector_store_service.search(query=query, sub_criterion=sub_criterion, top_k=top_k, doc_id=doc_id)
         
         if not chunks:
             return {

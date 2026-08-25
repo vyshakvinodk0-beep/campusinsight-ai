@@ -86,7 +86,7 @@ class PDFReportService:
         elements = []
 
         # Header Title
-        elements.append(Paragraph("CampusInsight Criterion 1 Assessment Report", title_style))
+        elements.append(Paragraph("AccrediSense Criterion 1 Evaluation & Readiness Report", title_style))
         subtitle_text = f"Institution: {html.escape(institution_name)} | Generated: {datetime.now().strftime('%B %d, %Y')}"
         if doc:
             subtitle_text += f" | Document ID: #{doc.id} ({html.escape(doc.original_name or '')})"
@@ -141,7 +141,14 @@ class PDFReportService:
                 elements.append(evt)
                 elements.append(Spacer(1, 10))
 
-        avg_score = sum([a.score for a in analyses]) / len(analyses) if analyses else 78.0
+        # Filter analyses to doc's sub-criterion if doc is provided for document isolation
+        if doc and analyses:
+            target_analyses = [a for a in analyses if a.sub_criterion == doc.sub_criterion]
+            analyses_for_score = target_analyses if target_analyses else analyses
+        else:
+            analyses_for_score = analyses
+
+        avg_score = sum([a.score for a in analyses_for_score]) / len(analyses_for_score) if analyses_for_score else 78.0
 
         # Section 1: Executive Summary
         elements.append(Paragraph("1. Executive Summary", h2_style))
@@ -154,11 +161,11 @@ class PDFReportService:
         ))
         elements.append(Spacer(1, 8))
 
-        # Section 2: CampusInsight Readiness Index
-        elements.append(Paragraph("2. CampusInsight Criterion 1 Readiness Index", h2_style))
+        # Section 2: AccrediSense Readiness Index
+        elements.append(Paragraph("2. AccrediSense Criterion 1 Readiness Index", h2_style))
         elements.append(Paragraph(
-            f"<b>CampusInsight Criterion 1 Readiness Index: {avg_score:.1f}%</b><br/>"
-            f"Formula Breakdown: 0.35 × Completeness + 0.25 × Relevance + 0.20 × Human Validation + 0.10 × Document Quality + 0.10 × Consistency.<br/>"
+            f"<b>AccrediSense Criterion 1 Readiness Index: {avg_score:.1f}%</b><br/>"
+            f"Formula Breakdown: 0.35 x Completeness + 0.25 x Relevance + 0.20 x Human Validation + 0.10 x Document Quality + 0.10 x Consistency.<br/>"
             f"<i>Internal institutional indicator — Not an official NAAC score.</i>",
             body_style
         ))

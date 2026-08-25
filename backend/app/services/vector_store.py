@@ -99,7 +99,7 @@ class FAISSVectorStoreService:
         except Exception as e:
             print(f"Error saving FAISS index: {e}")
 
-    def search(self, query: str, sub_criterion: str = "All", top_k: int = 4) -> List[Dict[str, Any]]:
+    def search(self, query: str, sub_criterion: str = "All", top_k: int = 4, doc_id: Optional[int] = None) -> List[Dict[str, Any]]:
         if not self.documents_metadata or not self.is_fitted:
             return []
 
@@ -111,13 +111,15 @@ class FAISSVectorStoreService:
         elif dim > 512:
             query_vec = query_vec[:, :512]
 
-        k = min(top_k * 3, len(self.documents_metadata))
+        k = min(top_k * 5, len(self.documents_metadata))
         distances, indices = self.index.search(query_vec, k)
 
         results = []
         for idx in indices[0]:
             if 0 <= idx < len(self.documents_metadata):
                 item = self.documents_metadata[idx]
+                if doc_id is not None and item.get("doc_id") != doc_id:
+                    continue
                 if sub_criterion == "All" or item["sub_criterion"] == sub_criterion or item["sub_criterion"] == "General":
                     results.append(item)
                     if len(results) >= top_k:
