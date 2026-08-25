@@ -6,7 +6,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import engine, Base, SessionLocal
 from app.core.seed_data import seed_database
-from app.api import auth, documents, criterion, analytics, reports, metrics, inbox, search
+from app.api import auth, documents, criterion, analytics, reports, metrics, inbox, search, notifications
 
 # Initialize Database Tables
 Base.metadata.create_all(bind=engine)
@@ -109,6 +109,7 @@ app.include_router(reports.router, prefix=settings.API_V1_STR)
 app.include_router(metrics.router, prefix=settings.API_V1_STR)
 app.include_router(inbox.router, prefix=settings.API_V1_STR)
 app.include_router(search.router, prefix=settings.API_V1_STR)
+app.include_router(notifications.router, prefix=settings.API_V1_STR)
 
 # Serve Frontend SPA if compiled dist folder exists
 frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../frontend/dist"))

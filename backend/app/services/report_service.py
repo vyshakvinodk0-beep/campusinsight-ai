@@ -86,7 +86,7 @@ class PDFReportService:
         elements = []
 
         # Header Title
-        elements.append(Paragraph("AccrediSense Criterion 1 Evaluation & Readiness Report", title_style))
+        elements.append(Paragraph("CampusInsight AI - Criterion 1 Evaluation & Readiness Report", title_style))
         subtitle_text = f"Institution: {html.escape(institution_name)} | Generated: {datetime.now().strftime('%B %d, %Y')}"
         if doc:
             subtitle_text += f" | Document ID: #{doc.id} ({html.escape(doc.original_name or '')})"
@@ -161,10 +161,10 @@ class PDFReportService:
         ))
         elements.append(Spacer(1, 8))
 
-        # Section 2: AccrediSense Readiness Index
-        elements.append(Paragraph("2. AccrediSense Criterion 1 Readiness Index", h2_style))
+        # Section 2: CampusInsight AI Readiness Index
+        elements.append(Paragraph("2. CampusInsight AI Criterion 1 Readiness Index", h2_style))
         elements.append(Paragraph(
-            f"<b>AccrediSense Criterion 1 Readiness Index: {avg_score:.1f}%</b><br/>"
+            f"<b>CampusInsight AI Criterion 1 Readiness Index: {avg_score:.1f}%</b><br/>"
             f"Formula Breakdown: 0.35 x Completeness + 0.25 x Relevance + 0.20 x Human Validation + 0.10 x Document Quality + 0.10 x Consistency.<br/>"
             f"<i>Internal institutional indicator — Not an official NAAC score.</i>",
             body_style
