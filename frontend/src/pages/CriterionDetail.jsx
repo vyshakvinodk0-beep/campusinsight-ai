@@ -9,6 +9,7 @@ const CriterionDetail = () => {
   const [detail, setDetail] = useState(null);
   const [shapData, setShapData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const subCriteriaTitles = {
     "1.1": "Curriculum Design and Development",
@@ -24,29 +25,54 @@ const CriterionDetail = () => {
     "1.4": ["Student Feedback", "Faculty Feedback", "Alumni Feedback", "Employer Feedback", "Feedback Analysis Reports", "Action Taken Reports (ATR)"]
   };
 
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [detRes, shapRes] = await Promise.all([
+        criterionAPI.getSubDetail(code),
+        analyticsAPI.getShapExplanation(code)
+      ]);
+      setDetail(detRes.data);
+      setShapData(shapRes.data);
+    } catch (err) {
+      console.error(`Failed to fetch detail for ${code}:`, err);
+      setError(`Failed to load Sub-Criterion ${code} details.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [detRes, shapRes] = await Promise.all([
-          criterionAPI.getSubDetail(code),
-          analyticsAPI.getShapExplanation(code)
-        ]);
-        setDetail(detRes.data);
-        setShapData(shapRes.data);
-      } catch (err) {
-        console.error(`Failed to fetch detail for ${code}:`, err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, [code]);
 
-  if (loading || !detail) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+        <div className="text-center space-y-3">
+          <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto" />
+          <p className="text-sm text-slate-600 font-medium">Loading Sub-Criterion {code} Details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !detail) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] p-4">
+        <div className="max-w-md w-full p-6 rounded-3xl bg-amber-50 border border-amber-200 text-center space-y-4 shadow-lg">
+          <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
+          <h3 className="text-lg font-bold text-amber-900">Sub-Criterion {code} Data Unavailable</h3>
+          <p className="text-xs text-amber-700 font-medium">{error || "Unable to load sub-criterion details."}</p>
+          <button
+            onClick={fetchData}
+            className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-all cursor-pointer shadow-md inline-flex items-center space-x-2"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Retry Loading Sub-Criterion {code}</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -100,6 +126,42 @@ const CriterionDetail = () => {
           ))}
         </div>
       </div>
+
+      {/* Sub-Criterion 1.4 Special Feedback Lifecycle Flow Diagram */}
+      {code === "1.4" && (
+        <div className="p-6 rounded-3xl glass-panel border border-blue-200 bg-blue-50/40 space-y-4">
+          <h3 className="text-base font-bold text-blue-900 flex items-center gap-2">
+            <Layers className="w-5 h-5 text-blue-600" />
+            Sub-Criterion 1.4 Stakeholder Feedback & Continuous Improvement Lifecycle
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-6 gap-2 text-center text-xs font-bold">
+            <div className="p-3 bg-white rounded-xl border border-blue-200 shadow-xs">
+              <span className="text-blue-600 block text-base font-black mb-0.5">1</span>
+              <span>Feedback Collected</span>
+            </div>
+            <div className="p-3 bg-white rounded-xl border border-blue-200 shadow-xs">
+              <span className="text-blue-600 block text-base font-black mb-0.5">2</span>
+              <span>Feedback Analyzed</span>
+            </div>
+            <div className="p-3 bg-white rounded-xl border border-blue-200 shadow-xs">
+              <span className="text-blue-600 block text-base font-black mb-0.5">3</span>
+              <span>Issues Identified</span>
+            </div>
+            <div className="p-3 bg-white rounded-xl border border-blue-200 shadow-xs">
+              <span className="text-blue-600 block text-base font-black mb-0.5">4</span>
+              <span>Action Taken</span>
+            </div>
+            <div className="p-3 bg-white rounded-xl border border-blue-200 shadow-xs">
+              <span className="text-blue-600 block text-base font-black mb-0.5">5</span>
+              <span>Action Taken Report (ATR)</span>
+            </div>
+            <div className="p-3 bg-emerald-600 text-white rounded-xl shadow-xs">
+              <span className="text-white block text-base font-black mb-0.5">6</span>
+              <span>Continuous Improvement</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SHAP Explainable AI Feature Importance Visualizer */}
       <ShapVisualizer shapData={shapData} />

@@ -15,9 +15,13 @@ import GapAnalysisPage from './pages/GapAnalysisPage';
 import ReportsPage from './pages/ReportsPage';
 import UserManagementPage from './pages/UserManagementPage';
 
+import AccreditationInboxPage from './pages/AccreditationInboxPage';
+import TrustCenterPage from './pages/TrustCenterPage';
+
 const ProtectedLayout = () => {
   const { user, loading } = useAuth();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   if (loading) {
     return (
@@ -33,16 +37,27 @@ const ProtectedLayout = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      <Navbar onOpenSearch={() => setIsSearchOpen(true)} />
+      {isDemoMode && (
+        <div className="bg-amber-500 text-slate-950 font-black text-xs py-1.5 px-4 text-center tracking-wider uppercase shadow-inner flex items-center justify-center gap-2">
+          <span>⚠️ DEMO DATA – NOT REAL INSTITUTIONAL EVIDENCE</span>
+        </div>
+      )}
+      <Navbar
+        onOpenSearch={() => setIsSearchOpen(true)}
+        isDemoMode={isDemoMode}
+        onToggleDemoMode={() => setIsDemoMode(!isDemoMode)}
+      />
       <div className="flex flex-1">
         <Sidebar />
         <main className="flex-1 p-8 overflow-y-auto max-w-7xl">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/evidence-matrix" element={<EvidenceMatrixPage />} />
-            <Route path="/sub-criterion/:code" element={<CriterionDetail />} />
-            <Route path="/documents" element={<DocumentsPage />} />
-            <Route path="/gaps-recommendations" element={<GapAnalysisPage />} />
+            <Route path="/" element={<Dashboard isDemoMode={isDemoMode} />} />
+            <Route path="/evidence-matrix" element={<EvidenceMatrixPage isDemoMode={isDemoMode} />} />
+            <Route path="/sub-criterion/:code" element={<CriterionDetail isDemoMode={isDemoMode} />} />
+            <Route path="/documents" element={<DocumentsPage isDemoMode={isDemoMode} />} />
+            <Route path="/gaps-recommendations" element={<GapAnalysisPage isDemoMode={isDemoMode} />} />
+            <Route path="/inbox" element={<AccreditationInboxPage />} />
+            <Route path="/trust-center" element={<TrustCenterPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/manage-users" element={<UserManagementPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

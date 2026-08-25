@@ -9,6 +9,10 @@ const UserManagementPage = () => {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
   const [message, setMessage] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  // Role Change Confirmation Modal State
+  const [pendingRoleChange, setPendingRoleChange] = useState(null);
 
   // New User Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,15 +41,27 @@ const UserManagementPage = () => {
     fetchUsers();
   }, []);
 
-  const handleRoleChange = async (userId, newRole) => {
-    setUpdatingId(userId);
+  const initiateRoleChange = (targetUser, newRole) => {
+    if (targetUser.role === newRole) return;
+    setPendingRoleChange({ targetUser, newRole });
+  };
+
+  const handleConfirmedRoleChange = async () => {
+    if (!pendingRoleChange) return;
+    const { targetUser, newRole } = pendingRoleChange;
+    setUpdatingId(targetUser.id);
     setMessage(null);
+    setErrorMessage(null);
     try {
-      const res = await authAPI.updateUserRole(userId, newRole, true);
+      const res = await authAPI.updateUserRole(targetUser.id, newRole, true);
       setMessage(`Role updated to '${res.data.role}' for ${res.data.full_name}`);
+      setPendingRoleChange(null);
       fetchUsers();
     } catch (err) {
-      console.error(err);
+      console.error("Role update failed:", err);
+      const detail = err.response?.data?.detail || "Failed to update role.";
+      setErrorMessage(detail);
+      alert(detail);
     } finally {
       setUpdatingId(null);
     }
@@ -128,11 +144,11 @@ const UserManagementPage = () => {
         </div>
         <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs space-y-1">
           <span className="font-bold text-amber-900 block">🏛️ Principal</span>
-          <p className="text-amber-800 font-medium">Final institutional approval (Stage 2) triggering the 5-Agent AI pipeline.</p>
+          <p className="text-amber-800 font-medium">Highest institutional approval authority: provides final institutional authorization for accreditation evidence.</p>
         </div>
         <div className="p-4 rounded-2xl bg-purple-50 border border-purple-200 text-xs space-y-1">
           <span className="font-bold text-purple-900 block">🔑 Administrator</span>
-          <p className="text-purple-700 font-medium">Technical system management, account creation, role assignment, and activity monitoring.</p>
+          <p className="text-purple-700 font-medium">Highest system and administrative authority: user management, evidence governance, audit log inspection, and system health monitoring.</p>
         </div>
       </div>
 
@@ -185,7 +201,7 @@ const UserManagementPage = () => {
                       ) : (
                         <select
                           value={u.role}
-                          onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                          onChange={(e) => initiateRoleChange(u, e.target.value)}
                           className="px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold focus:outline-none focus:border-blue-500"
                         >
                           <option value="Faculty">Faculty</option>
@@ -293,6 +309,56 @@ const UserManagementPage = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Role Change Confirmation Modal */}
+      {pendingRoleChange && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 p-6 space-y-5 shadow-2xl animate-fadeIn">
+            <div className="flex items-center space-x-3 text-purple-700 border-b border-slate-100 pb-3">
+              <Shield className="w-6 h-6 shrink-0 text-purple-600" />
+              <h3 className="text-base font-bold text-slate-900">Change User Role?</h3>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-100 text-xs space-y-2">
+              <p className="font-bold text-slate-900">
+                User: <span className="text-purple-800">{pendingRoleChange.targetUser.full_name}</span> ({pendingRoleChange.targetUser.email})
+              </p>
+              <div className="flex items-center space-x-3 font-semibold pt-1">
+                <span className="px-2.5 py-1 rounded bg-slate-200 text-slate-700">Current: {pendingRoleChange.targetUser.role}</span>
+                <span className="text-purple-600 font-extrabold">→</span>
+                <span className="px-2.5 py-1 rounded bg-purple-600 text-white">New: {pendingRoleChange.newRole}</span>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-start space-x-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <span>Warning: This will change the user's system permissions and logged audit trail records.</span>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setPendingRoleChange(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmedRoleChange}
+                disabled={updatingId === pendingRoleChange.targetUser.id}
+                className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-500/20 disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer"
+              >
+                {updatingId === pendingRoleChange.targetUser.id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <span>Confirm Role Change</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

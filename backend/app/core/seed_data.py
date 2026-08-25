@@ -28,7 +28,9 @@ def seed_database(db: Session):
                 full_name=u_data["full_name"],
                 role=u_data["role"],
                 department=u_data["department"],
-                is_active=True
+                is_active=True,
+                has_logged_in=True,
+                login_count=1
             )
             db.add(user)
     db.commit()

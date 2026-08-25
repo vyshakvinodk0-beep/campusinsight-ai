@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { documentAPI } from '../services/api';
+import { documentAPI, reportAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import DocumentUploader from '../components/DocumentUploader';
-import { FileText, Trash2, Eye, Filter, Loader2, CheckCircle, ShieldCheck, XCircle, AlertCircle } from 'lucide-react';
+import { FileText, Trash2, Eye, Filter, Loader2, CheckCircle, ShieldCheck, XCircle, AlertCircle, Download } from 'lucide-react';
 
 const DocumentsPage = () => {
   const { user } = useAuth();
@@ -14,6 +14,37 @@ const DocumentsPage = () => {
   const [rejectingDoc, setRejectingDoc] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [processingId, setProcessingId] = useState(null);
+  const [downloadingDocId, setDownloadingDocId] = useState(null);
+
+  const handleDownloadDocPdf = async (doc) => {
+    setDownloadingDocId(doc.id);
+    try {
+      const response = await reportAPI.downloadPdf("CampusInsight AI", doc.id);
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `CampusInsight_Report_Doc_${doc.id}_${(doc.original_name || doc.filename).replace(/\s+/g, '_')}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error("Failed to download PDF report:", err);
+      let errMsg = "Unable to generate PDF report for document #" + doc.id;
+      if (err.response && err.response.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const json = JSON.parse(text);
+          if (json.detail) errMsg = json.detail;
+        } catch (e) {}
+      } else if (err.response?.data?.detail) {
+        errMsg = err.response.data.detail;
+      }
+      alert(errMsg);
+      fetchDocuments();
+    } finally {
+      setDownloadingDocId(null);
+    }
+  };
 
   const fetchDocuments = async () => {
     setLoading(true);
@@ -280,6 +311,18 @@ const DocumentsPage = () => {
                     </td>
 
                     <td className="py-3.5 px-3 text-right space-x-1.5">
+                      <button
+                        onClick={() => handleDownloadDocPdf(doc)}
+                        disabled={downloadingDocId === doc.id}
+                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 text-emerald-700 border border-slate-200 cursor-pointer disabled:opacity-50"
+                        title={`Download PDF Report for Document #${doc.id}`}
+                      >
+                        {downloadingDocId === doc.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Download className="w-4 h-4" />
+                        )}
+                      </button>
                       <button
                         onClick={() => setPreviewDoc(doc)}
                         className="p-1.5 rounded-lg bg-slate-100 hover:bg-blue-50 text-blue-700 border border-slate-200 cursor-pointer"

@@ -4,6 +4,7 @@ const API_BASE = '/api';
 
 const api = axios.create({
   baseURL: API_BASE,
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -20,9 +21,13 @@ api.interceptors.request.use((config) => {
 
 export const authAPI = {
   login: (email, password) => api.post('/auth/login', { email, password }),
+  sendOtp: (email, purpose = 'verification') => api.post('/auth/send-otp', { email, purpose }),
+  verifyOtp: (email, otp, purpose = 'verification', autoLogin = false) => api.post('/auth/verify-otp', { email, otp, purpose, auto_login: autoLogin }),
   checkGoogleEmail: (email) => api.post('/auth/google-check-email', { email }),
   googleLogin: (email, fullName = 'Google User', role = 'Faculty', department = 'Computer Science & Engineering', token = null) =>
     api.post('/auth/google-login', { email, full_name: fullName, role, department, token }),
+  requestPasswordReset: (email) => api.post('/auth/request-password-reset', { email }),
+  resetPassword: (email, otp, newPassword) => api.post('/auth/reset-password', { email, otp, new_password: newPassword }),
   register: (userData) => api.post('/auth/register', userData),
   createUser: (userData) => api.post('/auth/users/create', userData),
   getMe: () => api.get('/auth/me'),
@@ -57,6 +62,10 @@ export const criterionAPI = {
 
 export const analyticsAPI = {
   getOverview: () => api.get('/analytics/overview'),
+  getPriorityActions: () => api.get('/analytics/priority-actions'),
+  getFixFirst: () => api.get('/analytics/fix-first'),
+  getTrustCenter: () => api.get('/analytics/trust-center'),
+  getDataLineage: (metricId) => api.get(`/analytics/data-lineage/${metricId}`),
   getShapExplanation: (subCriterion) => api.get(`/analytics/shap-explanation/${subCriterion}`),
 };
 
@@ -69,13 +78,21 @@ export const metricsAPI = {
 };
 
 export const reportAPI = {
-  downloadPdf: (institutionName) => {
-    return api.get(`/reports/download-pdf?institution=${encodeURIComponent(institutionName)}`, {
+  downloadPdf: (institutionName, documentId = null) => {
+    let url = `/reports/download-pdf?institution=${encodeURIComponent(institutionName)}`;
+    if (documentId) {
+      url += `&document_id=${documentId}`;
+    }
+    return api.get(url, {
       responseType: 'blob'
     });
   },
-  downloadCsv: (institutionName) => {
-    return api.get(`/reports/download-csv?institution=${encodeURIComponent(institutionName)}`, {
+  downloadCsv: (institutionName, documentId = null) => {
+    let url = `/reports/download-csv?institution=${encodeURIComponent(institutionName)}`;
+    if (documentId) {
+      url += `&document_id=${documentId}`;
+    }
+    return api.get(url, {
       responseType: 'blob'
     });
   }

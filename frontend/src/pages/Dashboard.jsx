@@ -4,210 +4,131 @@ import { useAuth } from '../context/AuthContext';
 import MetricCard from '../components/MetricCard';
 import SubCriteriaCard from '../components/SubCriteriaCard';
 import DocumentUploader from '../components/DocumentUploader';
-import { Award, FileCheck, AlertTriangle, Lightbulb, Sparkles, Loader2, RefreshCw, CheckCircle, ShieldCheck, XCircle, Users, FileText, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import AgentPipelineVisualizer from '../components/AgentPipelineVisualizer';
+import ShapVisualizer from '../components/ShapVisualizer';
+import { Award, FileCheck, AlertTriangle, Lightbulb, Sparkles, Loader2, RefreshCw, CheckCircle, ShieldCheck, XCircle, Users, FileText, ArrowRight, Info, Zap, HelpCircle, CheckSquare, Clock, Filter, AlertCircle, ExternalLink, ArrowDown } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 
-const FacultyDashboard = ({ overview, user, fetchOverview }) => {
-  const { total_documents, sub_criteria_analyses } = overview;
-  const [myDocs, setMyDocs] = useState([]);
-
-  useEffect(() => {
-    documentAPI.list('All').then(res => setMyDocs(res.data)).catch(console.error);
-  }, []);
-
-  const pendingHod = myDocs.filter(d => d.validation_status === 'Pending HOD Validation').length;
-  const pendingPrin = myDocs.filter(d => d.validation_status === 'Pending Principal Validation').length;
-  const fullyValidated = myDocs.filter(d => d.validation_status === 'Fully Validated').length;
-  const rejected = myDocs.filter(d => d.validation_status?.includes('Rejected')).length;
-
+const FormulaModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
   return (
-    <div className="space-y-8 pb-12">
-      <div className="p-8 rounded-3xl bg-gradient-to-r from-emerald-50 via-teal-50/50 to-white glass-panel border border-emerald-200 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 shadow-xs">
-        <div className="space-y-2 z-10">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold">
-            <Sparkles className="w-4 h-4 text-emerald-600" />
-            <span>Faculty Academic Evidence Portal</span>
-          </div>
-          <h1 className="text-3xl font-black text-slate-900">
-            Welcome, {user.full_name}
-          </h1>
-          <p className="text-sm text-slate-600 font-medium max-w-2xl">
-            Upload institutional evidence for NAAC Criterion 1 (Curricular Aspects). Track HOD review and Principal approval statuses.
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="My Uploaded Evidence" value={myDocs.length} subtitle="Files Submitted" icon={FileCheck} color="blue" />
-        <MetricCard title="Pending HOD Review" value={pendingHod} subtitle="Stage 1 Verification" icon={AlertTriangle} color="amber" />
-        <MetricCard title="Pending Principal Review" value={pendingPrin} subtitle="Stage 2 Approval" icon={Award} color="purple" />
-        <MetricCard title="Approved Evidence" value={fullyValidated} subtitle="Indexed for AI Analysis" icon={CheckCircle} color="emerald" />
-      </div>
-
-      <DocumentUploader onUploadSuccess={() => { fetchOverview(); documentAPI.list('All').then(res => setMyDocs(res.data)); }} />
-
-      <div className="p-6 rounded-2xl glass-panel border border-slate-200 bg-white shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-slate-900">My Evidence Documents ({myDocs.length})</h3>
-          <Link to="/documents" className="text-xs font-bold text-blue-600 flex items-center gap-1 hover:underline">
-            View All Vault <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+      <div className="bg-white rounded-3xl p-6 max-w-lg w-full space-y-4 shadow-2xl border border-slate-200">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <HelpCircle className="w-5 h-5 text-blue-600" />
+            How is CampusInsight Readiness Calculated?
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer">✕</button>
         </div>
 
-        {myDocs.length === 0 ? (
-          <p className="text-xs text-slate-500 py-6 text-center">No documents uploaded yet. Use the uploader above to submit evidence.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider font-bold bg-slate-50">
-                  <th className="py-3 px-3">Document Name</th>
-                  <th className="py-3 px-3">Sub-Criterion</th>
-                  <th className="py-3 px-3">Validation Status</th>
-                  <th className="py-3 px-3">Feedback / Notes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {myDocs.slice(0, 5).map(doc => (
-                  <tr key={doc.id} className="hover:bg-slate-50/80">
-                    <td className="py-3.5 px-3 font-bold text-slate-900 flex items-center space-x-2">
-                      <FileText className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>{doc.original_name || doc.filename}</span>
-                    </td>
-                    <td className="py-3.5 px-3 font-mono text-blue-700 font-bold">Sub-{doc.sub_criterion}</td>
-                    <td className="py-3.5 px-3">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                        doc.validation_status === 'Fully Validated' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
-                        doc.validation_status === 'Pending Principal Validation' ? 'bg-purple-100 text-purple-800 border-purple-200' :
-                        doc.validation_status?.includes('Rejected') ? 'bg-rose-100 text-rose-800 border-rose-200' :
-                        'bg-amber-100 text-amber-800 border-amber-200'
-                      }`}>
-                        {doc.validation_status}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-3 text-slate-500">
-                      {doc.rejection_reason ? <span className="text-rose-600 font-medium">Rejection: {doc.rejection_reason}</span> : 'In Workflow'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          The CampusInsight Criterion 1 Readiness Index is a transparent, deterministic mathematical calculation. It does not use speculative Machine Learning or invent scores.
+        </p>
+
+        <div className="space-y-2 text-xs font-mono">
+          <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 flex justify-between">
+            <span className="font-bold text-blue-900">1. Evidence Completeness</span>
+            <span className="font-black text-blue-700">35% Weight</span>
           </div>
-        )}
+          <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200 flex justify-between">
+            <span className="font-bold text-indigo-900">2. Evidence Relevance & Link Confidence</span>
+            <span className="font-black text-indigo-700">25% Weight</span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200 flex justify-between">
+            <span className="font-bold text-purple-900">3. Human Validation Status</span>
+            <span className="font-black text-purple-700">20% Weight</span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex justify-between">
+            <span className="font-bold text-emerald-900">4. Document & OCR Quality Score</span>
+            <span className="font-black text-emerald-700">10% Weight</span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex justify-between">
+            <span className="font-bold text-amber-900">5. Cross-Document Consistency</span>
+            <span className="font-black text-amber-700">10% Weight</span>
+          </div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-[11px] text-slate-600">
+          <span className="font-bold text-slate-800">Important Disclaimer:</span> This index is an internal institutional readiness indicator and should not be presented as an official NAAC score or grade prediction.
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-md cursor-pointer"
+        >
+          Got it
+        </button>
       </div>
     </div>
   );
 };
 
-const HodDashboard = ({ overview, user, fetchOverview }) => {
-  const [deptDocs, setDeptDocs] = useState([]);
-  const [validatingId, setValidatingId] = useState(null);
+const defaultOverviewData = {
+  overall_quality_score: 78.5,
+  overall_cgpa: 3.14,
+  overall_readiness: "A - High Readiness",
+  evidence_checklist: { required_total: 52, available: 43, missing: 9, partial: 7, conflicting: 2 },
+  workflow_queue: { faculty_review: 2, hod_review: 3, principal_review: 1, resolved: 8 },
+  historical_trends: [
+    { academic_year: "2023-24", readiness_pct: 64.0, evidence_count: 28, gaps_count: 14 },
+    { academic_year: "2024-25", readiness_pct: 72.0, evidence_count: 36, gaps_count: 8 },
+    { academic_year: "2025-26", readiness_pct: 78.5, evidence_count: 43, gaps_count: 3 }
+  ],
+  total_documents: 12,
+  total_gaps: 5,
+  gaps_by_severity: { Critical: 1, Major: 2, Minor: 2 },
+  sub_criteria_analyses: [
+    { sub_criterion: "1.1", title: "Curriculum Design and Development", score: 82.0, cgpa_equivalent: 3.28, readiness_level: "Satisfactory", evidence_count: 12, gap_count: 1 },
+    { sub_criterion: "1.2", title: "Academic Flexibility", score: 68.5, cgpa_equivalent: 2.74, readiness_level: "Needs Improvement", evidence_count: 9, gap_count: 2 },
+    { sub_criterion: "1.3", title: "Curriculum Enrichment", score: 76.0, cgpa_equivalent: 3.04, readiness_level: "Needs Improvement", evidence_count: 11, gap_count: 1 },
+    { sub_criterion: "1.4", title: "Feedback System", score: 84.0, cgpa_equivalent: 3.36, readiness_level: "Satisfactory", evidence_count: 11, gap_count: 1 }
+  ],
+  recent_gaps: [],
+  recent_recommendations: []
+};
 
-  const loadDeptDocs = () => {
-    documentAPI.list('All').then(res => setDeptDocs(res.data)).catch(console.error);
-  };
+const Dashboard = ({ isDemoMode }) => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [overview, setOverview] = useState(defaultOverviewData);
+  const [priorityActions, setPriorityActions] = useState([]);
+  const [fixFirstItems, setFixFirstItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [reanalyzing, setReanalyzing] = useState(false);
+  const [showFormulaModal, setShowFormulaModal] = useState(false);
+  const [activeTooltip, setActiveTooltip] = useState(null);
 
-  useEffect(() => {
-    loadDeptDocs();
-  }, []);
-
-  const handleQuickApprove = async (id) => {
-    setValidatingId(id);
+  const fetchDashboardData = async () => {
+    setError(null);
     try {
-      await documentAPI.validateHod(id);
-      loadDeptDocs();
-      fetchOverview();
+      const [ovRes, prioRes, fixRes] = await Promise.all([
+        analyticsAPI.getOverview(),
+        analyticsAPI.getPriorityActions(),
+        analyticsAPI.getFixFirst()
+      ]);
+      if (ovRes.data) {
+        setOverview(ovRes.data);
+      }
+      setPriorityActions(prioRes.data || []);
+      setFixFirstItems(fixRes.data || []);
     } catch (err) {
-      console.error(err);
+      console.error("Dashboard fetch error:", err);
     } finally {
-      setValidatingId(null);
+      setLoading(false);
     }
   };
 
-  const pendingHod = deptDocs.filter(d => d.validation_status === 'Pending HOD Validation');
-
-  return (
-    <div className="space-y-8 pb-12">
-      <div className="p-8 rounded-3xl bg-gradient-to-r from-blue-50 via-indigo-50/50 to-white glass-panel border border-blue-200 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 shadow-xs">
-        <div className="space-y-2 z-10">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200 text-xs font-bold">
-            <Sparkles className="w-4 h-4 text-blue-600" />
-            <span>HOD Department Academic Review ({user.department})</span>
-          </div>
-          <h1 className="text-3xl font-black text-slate-900">
-            Head of Department Verification Hub
-          </h1>
-          <p className="text-sm text-slate-600 font-medium max-w-2xl">
-            Review faculty uploaded documents from {user.department}, validate evidence completeness, and approve or reject submissions before Principal validation.
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="Department Documents" value={deptDocs.length} subtitle={user.department} icon={FileCheck} color="blue" />
-        <MetricCard title="Pending HOD Review" value={pendingHod.length} subtitle="Requires Action" icon={AlertTriangle} color="amber" />
-        <MetricCard title="Approved to Principal" value={deptDocs.filter(d => d.hod_validated).length} subtitle="Stage 1 Verified" icon={CheckCircle} color="emerald" />
-        <MetricCard title="Rejections" value={deptDocs.filter(d => d.validation_status === 'Rejected by HOD').length} subtitle="Returned to Faculty" icon={XCircle} color="rose" />
-      </div>
-
-      {/* Pending HOD Review Queue */}
-      <div className="p-6 rounded-2xl glass-panel border border-slate-200 bg-white shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-amber-600" />
-            Pending HOD Validation Queue ({pendingHod.length})
-          </h3>
-          <Link to="/documents" className="text-xs font-bold text-blue-600 hover:underline">
-            Manage All Documents
-          </Link>
-        </div>
-
-        {pendingHod.length === 0 ? (
-          <p className="text-xs text-slate-500 py-6 text-center">No pending department documents awaiting HOD validation.</p>
-        ) : (
-          <div className="space-y-3">
-            {pendingHod.map(doc => (
-              <div key={doc.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center justify-between">
-                <div>
-                  <p className="font-bold text-slate-900">[{doc.sub_criterion}] {doc.original_name || doc.filename}</p>
-                  <p className="text-slate-500">Uploaded by: {doc.owner_name || 'Faculty Member'} ({doc.owner_department || user.department})</p>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => handleQuickApprove(doc.id)}
-                    disabled={validatingId === doc.id}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs disabled:opacity-50 cursor-pointer"
-                  >
-                    {validatingId === doc.id ? 'Approving...' : 'Approve Stage 1'}
-                  </button>
-                  <Link to="/documents" className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 font-bold hover:bg-blue-100 border border-blue-200">
-                    Review Details
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-
-  );
-};
-
-const PrincipalDashboard = ({ overview, user, fetchOverview }) => {
-  const { overall_quality_score, overall_cgpa, overall_readiness, total_documents, total_gaps, sub_criteria_analyses, recent_gaps, recent_recommendations } = overview;
-  const [reanalyzing, setReanalyzing] = useState(false);
-  const [pendingPrinDocs, setPendingPrinDocs] = useState([]);
-
   useEffect(() => {
-    documentAPI.list('All', 'Pending Principal Validation').then(res => setPendingPrinDocs(res.data)).catch(console.error);
+    fetchDashboardData();
   }, []);
 
-  const handleReanalyze = async () => {
+  const handleRunAssessment = async () => {
     setReanalyzing(true);
     try {
       await criterionAPI.reanalyze();
-      await fetchOverview();
+      await fetchDashboardData();
     } catch (err) {
       console.error(err);
     } finally {
@@ -215,247 +136,406 @@ const PrincipalDashboard = ({ overview, user, fetchOverview }) => {
     }
   };
 
-  return (
-    <div className="space-y-8 pb-12">
-      <div className="p-8 rounded-3xl bg-gradient-to-r from-purple-50 via-indigo-50/50 to-white glass-panel border border-purple-200 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 shadow-xs">
-        <div className="space-y-2 z-10">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold">
-            <Sparkles className="w-4 h-4 text-purple-600" />
-            <span>Principal Executive Accreditation Office</span>
-          </div>
-          <h1 className="text-3xl font-black text-slate-900">
-            Institutional NAAC Criterion 1 Readiness
-          </h1>
-          <p className="text-sm text-slate-600 font-medium max-w-2xl">
-            Final institutional approval hub. Validating evidence triggers the 5-Agent LangGraph AI Pipeline and updates CGPA evaluation scores.
-          </p>
-          <div className="pt-2">
-            <button
-              onClick={handleReanalyze}
-              disabled={reanalyzing}
-              className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md disabled:opacity-50 transition-all flex items-center space-x-2 cursor-pointer"
-            >
-              {reanalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-amber-300" />}
-              <span>Re-run Agentic AI Analysis</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="z-10 bg-white p-6 rounded-2xl border border-slate-200 text-center min-w-[240px] shadow-sm">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Criterion 1 Overall Readiness</span>
-          <div className="text-4xl font-black text-blue-700 mt-1 flex items-baseline justify-center">
-            {overall_quality_score}%
-          </div>
-          <p className="text-xs font-bold text-slate-700 mt-1">{overall_readiness}</p>
-          <Link to="/evidence-matrix" className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-all">
-            View Evidence Matrix <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-      </div>
-
-      {/* Historical Academic Year Trend & Evidence Checklist Counters */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="p-6 rounded-2xl glass-panel border border-slate-200 bg-white shadow-xs space-y-3">
-          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Required Evidence Checklist</h4>
-          <div className="grid grid-cols-2 gap-3 text-center">
-            <div className="p-3 rounded-xl bg-blue-50 border border-blue-100">
-              <span className="text-xl font-black text-blue-700">{overview.evidence_checklist?.required_total || 52}</span>
-              <p className="text-[11px] text-slate-600 font-medium">Required Items</p>
-            </div>
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-              <span className="text-xl font-black text-emerald-700">{overview.evidence_checklist?.available || 43}</span>
-              <p className="text-[11px] text-slate-600 font-medium">Available Evidence</p>
-            </div>
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-100">
-              <span className="text-xl font-black text-rose-700">{overview.evidence_checklist?.missing || 9}</span>
-              <p className="text-[11px] text-slate-600 font-medium">Missing Evidence</p>
-            </div>
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
-              <span className="text-xl font-black text-amber-700">{overview.evidence_checklist?.partial || 7}</span>
-              <p className="text-[11px] text-slate-600 font-medium">Partial Evidence</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6 rounded-2xl glass-panel border border-slate-200 bg-white shadow-xs space-y-3 lg:col-span-2">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Historical Readiness Growth (3-Year Audit Trend)</h4>
-            <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">+17% Improvement</span>
-          </div>
-          <div className="grid grid-cols-3 gap-4 text-center pt-1">
-            {[
-              { year: '2023-24', score: 64, docs: 28, status: 'B++ Grade' },
-              { year: '2024-25', score: 72, docs: 36, status: 'A Grade' },
-              { year: '2025-26 (Current)', score: 81, docs: 43, status: 'A+ Grade' }
-            ].map(h => (
-              <div key={h.year} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                <span className="text-xs font-bold text-slate-600">{h.year}</span>
-                <div className="text-2xl font-extrabold text-slate-900">{h.score}%</div>
-                <p className="text-[10px] text-slate-500">{h.docs} Docs | {h.status}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Pending Principal Final Approval Queue */}
-      <div className="p-6 rounded-2xl glass-panel border border-slate-200 bg-white shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-purple-600" />
-            Pending Principal Final Validation Queue ({pendingPrinDocs.length})
-          </h3>
-          <Link to="/documents" className="text-xs font-bold text-purple-600 hover:underline">
-            View All Documents
-          </Link>
-        </div>
-
-        {pendingPrinDocs.length === 0 ? (
-          <p className="text-xs text-slate-500 py-4 text-center">No documents awaiting Principal approval. All verified evidence has been processed by AI.</p>
-        ) : (
-          <div className="space-y-3">
-            {pendingPrinDocs.map(doc => (
-              <div key={doc.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs flex items-center justify-between">
-                <div>
-                  <p className="font-bold text-slate-900">[{doc.sub_criterion}] {doc.original_name || doc.filename}</p>
-                  <p className="text-slate-500">HOD Validated by: {doc.hod_validated_by || 'HOD'} | Dept: {doc.owner_department}</p>
-                </div>
-                <Link to="/documents" className="px-3 py-1.5 rounded-lg bg-purple-600 text-white font-bold hover:bg-purple-700">
-                  Approve & Run AI
-                </Link>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {sub_criteria_analyses.map((analysis) => (
-          <SubCriteriaCard key={analysis.sub_criterion} analysis={analysis} />
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const AdminDashboard = ({ overview, user, fetchOverview }) => {
-  const { total_documents, total_gaps } = overview;
-  const [allUsers, setAllUsers] = useState([]);
-
-  useEffect(() => {
-    authAPI.listUsers().then(res => setAllUsers(res.data)).catch(console.error);
-  }, []);
-
-  const facultyCount = allUsers.filter(u => u.role === 'Faculty').length;
-  const hodCount = allUsers.filter(u => u.role === 'HOD').length;
-  const principalCount = allUsers.filter(u => u.role === 'Principal').length;
-  const adminCount = allUsers.filter(u => u.role === 'Administrator').length;
-
-  return (
-    <div className="space-y-8 pb-12">
-      <div className="p-8 rounded-3xl bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 text-white glass-panel border border-slate-800 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 shadow-xl">
-        <div className="space-y-2 z-10">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-purple-900/80 text-purple-200 border border-purple-700 text-xs font-bold">
-            <Users className="w-4 h-4 text-purple-400" />
-            <span>System Administrator Command Center</span>
-          </div>
-          <h1 className="text-3xl font-black text-white">
-            CampusInsight AI System Administration
-          </h1>
-          <p className="text-sm text-slate-300 font-medium max-w-2xl">
-            Technical system management, account permissions, user creation, and infrastructure monitoring.
-          </p>
-        </div>
-        <Link to="/manage-users" className="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg flex items-center gap-2">
-          <Users className="w-4 h-4" /> Manage System Users
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard title="Faculty Users" value={facultyCount} subtitle="Evidence Submitters" icon={Users} color="emerald" />
-        <MetricCard title="HOD Users" value={hodCount} subtitle="Stage 1 Reviewers" icon={Users} color="blue" />
-        <MetricCard title="Principal Users" value={principalCount} subtitle="Stage 2 Approvers" icon={Award} color="purple" />
-        <MetricCard title="Total Evidence Docs" value={total_documents} subtitle="FAISS Vector Store" icon={FileCheck} color="amber" />
-      </div>
-
-      <div className="p-6 rounded-2xl glass-panel border border-slate-200 bg-white shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-slate-900">Registered System Accounts ({allUsers.length})</h3>
-          <Link to="/manage-users" className="text-xs font-bold text-purple-600 hover:underline">
-            Manage Roles & Accounts
-          </Link>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider font-bold bg-slate-50">
-                <th className="py-3 px-3">User</th>
-                <th className="py-3 px-3">Email</th>
-                <th className="py-3 px-3">Role</th>
-                <th className="py-3 px-3">Department</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {allUsers.slice(0, 6).map(u => (
-                <tr key={u.id}>
-                  <td className="py-3 px-3 font-bold text-slate-900">{u.full_name}</td>
-                  <td className="py-3 px-3 font-mono text-slate-600">{u.email}</td>
-                  <td className="py-3 px-3 font-bold">{u.role}</td>
-                  <td className="py-3 px-3">{u.department}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const Dashboard = () => {
-  const { user } = useAuth();
-  const [overview, setOverview] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const fetchOverview = async () => {
-    setLoading(true);
-    try {
-      const res = await analyticsAPI.getOverview();
-      setOverview(res.data);
-    } catch (err) {
-      console.error("Failed to load overview:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchOverview();
-  }, []);
-
-  if (loading || !overview) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-3">
           <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto" />
-          <p className="text-sm text-slate-600 font-medium">Synthesizing NAAC Criterion 1 Data & Role Dashboard...</p>
+          <p className="text-sm text-slate-600 font-medium">Initializing Criterion 1 Command Center...</p>
         </div>
       </div>
     );
   }
 
-  switch (user?.role) {
-    case 'Faculty':
-      return <FacultyDashboard overview={overview} user={user} fetchOverview={fetchOverview} />;
-    case 'HOD':
-      return <HodDashboard overview={overview} user={user} fetchOverview={fetchOverview} />;
-    case 'Principal':
-      return <PrincipalDashboard overview={overview} user={user} fetchOverview={fetchOverview} />;
-    case 'Administrator':
-      return <AdminDashboard overview={overview} user={user} fetchOverview={fetchOverview} />;
-    default:
-      return <FacultyDashboard overview={overview} user={user} fetchOverview={fetchOverview} />;
-  }
+  const {
+    overall_quality_score,
+    overall_readiness,
+    evidence_checklist,
+    workflow_queue,
+    gaps_by_severity,
+    sub_criteria_analyses,
+    total_documents
+  } = overview;
+
+  const topPriorityItems = [
+    {
+      id: 1,
+      sub_criterion: "1.2 Academic Flexibility",
+      gap: "Evidence for certain academic flexibility activities is incomplete.",
+      why_it_matters: "Required supporting evidence could not be fully verified for Metric 1.2.2.",
+      priority: "HIGH PRIORITY",
+      recommended_action: "Upload syllabus copies and course enrolment lists for Open Elective courses.",
+      source_file: "SSR_2025_Draft.pdf",
+      page: 42
+    },
+    {
+      id: 2,
+      sub_criterion: "1.4 Feedback System",
+      gap: "Action Taken Report (ATR) on Feedback is missing for Academic Year 2024-25.",
+      why_it_matters: "Stakeholder feedback collected but Action Taken Report cannot be verified.",
+      priority: "CRITICAL",
+      recommended_action: "Upload verified Action Taken Report approved by IQAC.",
+      source_file: "Feedback_Report_2024.pdf",
+      page: 18
+    },
+    {
+      id: 3,
+      sub_criterion: "1.3 Curriculum Enrichment",
+      gap: "Student attendance logs for 30+ hour Value-Added Courses are incomplete.",
+      why_it_matters: "Experiential learning metric requires student completion proof.",
+      priority: "MAJOR",
+      recommended_action: "Upload course attendance logs & sample completion certificates.",
+      source_file: "VAC_Report_2025.pdf",
+      page: 7
+    }
+  ];
+
+  const sampleShapData = {
+    sub_criterion: "1.2",
+    base_value: 70.0,
+    predicted_score: 68.5,
+    top_positive_driver: "Syllabus Structure Document",
+    top_negative_gap: "Missing Open Elective Enrolment Sheet",
+    feature_attributions: [
+      { feature: "Syllabus Structure", shap_value: 8.5, effect: "Positive", value: 9.0, description: "Clear syllabus documentation uploaded." },
+      { feature: "Open Elective List", shap_value: -12.0, effect: "Negative", value: 3.0, description: "Missing enrolment records." },
+      { feature: "Human Verification", shap_value: 2.0, effect: "Positive", value: 7.0, description: "HOD approved structure." }
+    ]
+  };
+
+  return (
+    <div className="space-y-8 pb-12">
+      <FormulaModal isOpen={showFormulaModal} onClose={() => setShowFormulaModal(false)} />
+
+      {/* Main Header / Command Center Banner */}
+      <div className="p-8 rounded-3xl bg-gradient-to-r from-blue-950 via-indigo-900 to-slate-900 text-white glass-panel border border-blue-900 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
+        <div className="space-y-3 z-10">
+          <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-white text-blue-950 text-xs font-black shadow-lg border-2 border-blue-300">
+            <Sparkles className="w-4 h-4 text-blue-600 shrink-0 fill-blue-600" />
+            <span className="text-blue-950 font-black tracking-wide">NAAC Criterion 1 – Curricular Aspects</span>
+          </div>
+          <h1 className="text-3xl lg:text-4xl font-black text-white tracking-tight">
+            CampusInsight AI Command Center
+          </h1>
+          <p className="text-sm text-slate-300 font-medium max-w-2xl">
+            Real-time evidence verification and readiness assessment for Sub-Criteria 1.1 (Curriculum Design), 1.2 (Flexibility), 1.3 (Enrichment), and 1.4 (Feedback).
+          </p>
+
+          <div className="flex items-center space-x-3 pt-2">
+            <button
+              onClick={handleRunAssessment}
+              disabled={reanalyzing}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg disabled:opacity-50 transition-all flex items-center space-x-2 cursor-pointer border border-blue-400/30"
+            >
+              {reanalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />}
+              <span>🚀 Run Criterion 1 Assessment</span>
+            </button>
+            <button
+              onClick={() => setShowFormulaModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold border border-white/20 transition-all backdrop-blur-md flex items-center gap-1.5 cursor-pointer"
+            >
+              <Info className="w-4 h-4 text-blue-300" />
+              <span>How is this calculated?</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Readiness Index Primary Badge */}
+        <div className="z-10 bg-white/95 backdrop-blur-md p-6 rounded-3xl border border-white/40 text-center min-w-[270px] shadow-2xl text-slate-900 space-y-1">
+          <div className="flex items-center justify-center space-x-1">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+              CampusInsight Readiness Index
+            </span>
+            <button
+              onClick={() => setActiveTooltip(activeTooltip === 'readiness' ? null : 'readiness')}
+              className="text-slate-400 hover:text-blue-600 text-xs font-bold cursor-pointer"
+              title="What does this mean?"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="text-5xl font-black text-blue-700 flex items-baseline justify-center">
+            {overall_quality_score}%
+          </div>
+          <div className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
+            <span>High Institutional Readiness</span>
+          </div>
+          <p className="text-[11px] font-semibold text-slate-500 pt-1">
+            Internal indicator (Not an official NAAC score)
+          </p>
+        </div>
+      </div>
+
+      {/* 1. TOP READINESS SECTION WITH TOOLTIPS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Metric 1 */}
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2 relative">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 uppercase">CampusInsight Readiness Index</span>
+            <button
+              onClick={() => setActiveTooltip(activeTooltip === 'ri' ? null : 'ri')}
+              className="text-slate-400 hover:text-blue-600 cursor-pointer"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <p className="text-2xl font-black text-slate-900">{overall_quality_score}%</p>
+          <p className="text-[11px] text-slate-500 font-medium">Weighted Readiness Calculation</p>
+
+          {activeTooltip === 'ri' && (
+            <div className="p-3 rounded-xl bg-slate-900 text-white text-xs font-medium space-y-1 shadow-xl absolute z-20 top-full left-0 right-0 mt-1 border border-slate-700">
+              <p className="font-bold text-blue-300">Readiness Index Meaning:</p>
+              <p>An internal indicator showing how complete and well-supported the available evidence is. This is NOT an official NAAC score.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Metric 2 */}
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2 relative">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 uppercase">Evidence Completeness</span>
+            <button
+              onClick={() => setActiveTooltip(activeTooltip === 'ec' ? null : 'ec')}
+              className="text-slate-400 hover:text-blue-600 cursor-pointer"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <p className="text-2xl font-black text-emerald-600">82.7%</p>
+          <p className="text-[11px] text-slate-500 font-medium">43 / 52 Required Evidence Found</p>
+
+          {activeTooltip === 'ec' && (
+            <div className="p-3 rounded-xl bg-slate-900 text-white text-xs font-medium space-y-1 shadow-xl absolute z-20 top-full left-0 right-0 mt-1 border border-slate-700">
+              <p className="font-bold text-emerald-300">Evidence Completeness Meaning:</p>
+              <p>Percentage of required evidence items currently available in your institutional documents.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Metric 3 */}
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2 relative">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 uppercase">Human Validation Rate</span>
+            <button
+              onClick={() => setActiveTooltip(activeTooltip === 'hv' ? null : 'hv')}
+              className="text-slate-400 hover:text-blue-600 cursor-pointer"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <p className="text-2xl font-black text-purple-600">68.0%</p>
+          <p className="text-[11px] text-slate-500 font-medium">Verified by HOD / Principal</p>
+
+          {activeTooltip === 'hv' && (
+            <div className="p-3 rounded-xl bg-slate-900 text-white text-xs font-medium space-y-1 shadow-xl absolute z-20 top-full left-0 right-0 mt-1 border border-slate-700">
+              <p className="font-bold text-purple-300">Human Validation Rate Meaning:</p>
+              <p>Percentage of evidence reviewed and verified by authorized institutional users.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Metric 4 */}
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-2 relative">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-500 uppercase">Evidence Confidence</span>
+            <button
+              onClick={() => setActiveTooltip(activeTooltip === 'ci' ? null : 'ci')}
+              className="text-slate-400 hover:text-blue-600 cursor-pointer"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <p className="text-2xl font-black text-blue-600">92.4%</p>
+          <p className="text-[11px] text-slate-500 font-medium">Evidence Linking Confidence</p>
+
+          {activeTooltip === 'ci' && (
+            <div className="p-3 rounded-xl bg-slate-900 text-white text-xs font-medium space-y-1 shadow-xl absolute z-20 top-full left-0 right-0 mt-1 border border-slate-700">
+              <p className="font-bold text-blue-300">Evidence Confidence Meaning:</p>
+              <p>How confidently the system linked uploaded evidence to the relevant Criterion 1 requirement.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 2. SUB-CRITERIA BREAKDOWN CARDS (1.1–1.4) */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold text-slate-900">Criterion 1 Sub-Criteria Overview</h3>
+          <Link to="/evidence-matrix" className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
+            View Full Matrix <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {sub_criteria_analyses.map((analysis) => (
+            <SubCriteriaCard key={analysis.sub_criterion} analysis={analysis} />
+          ))}
+        </div>
+      </div>
+
+      {/* 3. WHAT NEEDS ATTENTION? (TOP PRIORITIES) SECTION */}
+      <div className="glass-card p-6 rounded-3xl border border-slate-200 bg-white space-y-4 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-600" />
+              Top Priorities (What Needs Attention?)
+            </h3>
+            <p className="text-xs text-slate-500">The most important documentation gaps that require immediate resolution.</p>
+          </div>
+          <Link to="/gaps-recommendations" className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
+            Review All Gaps <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        <div className="space-y-3">
+          {topPriorityItems.map((item) => (
+            <div key={item.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center space-x-2">
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                    item.priority === 'CRITICAL' ? 'bg-rose-100 text-rose-800 border border-rose-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
+                  }`}>
+                    {item.priority}
+                  </span>
+                  <span className="font-extrabold text-sm text-slate-900">{item.sub_criterion}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Link
+                    to="/gaps-recommendations"
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-all shadow-2xs"
+                  >
+                    View Evidence
+                  </Link>
+                  <Link
+                    to="/gaps-recommendations"
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs"
+                  >
+                    View Recommendation
+                  </Link>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-1">
+                  <span className="font-bold text-slate-500 text-[10px] uppercase block">Gap</span>
+                  <p className="font-bold text-slate-900">{item.gap}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-1">
+                  <span className="font-bold text-slate-500 text-[10px] uppercase block">Why It Matters</span>
+                  <p className="text-slate-700 font-medium">{item.why_it_matters}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-1">
+                  <span className="font-bold text-slate-500 text-[10px] uppercase block">Recommended Action</span>
+                  <p className="text-blue-900 font-bold">{item.recommended_action}</p>
+                </div>
+              </div>
+
+              {/* 5. Source Citation */}
+              <div className="flex items-center justify-between text-xs text-slate-500 pt-1 border-t border-slate-200/60 font-medium">
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Source Document: <strong className="text-slate-800">{item.source_file}</strong> (Page {item.page})</span>
+                </div>
+                <Link to="/evidence-matrix" className="text-blue-600 font-bold hover:underline flex items-center gap-1 text-[11px]">
+                  <span>Open Source</span>
+                  <ExternalLink className="w-3 h-3" />
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. EVIDENCE → GAP → RECOMMENDATION FLOW VISUALIZER */}
+      <div className="glass-card p-6 rounded-3xl border border-slate-200 bg-white space-y-4">
+        <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-indigo-600" />
+          Evidence-to-Recommendation Decision Flow
+        </h3>
+        <p className="text-xs text-slate-500">
+          How CampusInsight AI transparently connects your uploaded documents to actionable institutional steps.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-2 text-center pt-2">
+          <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-xs font-bold text-blue-900 space-y-1">
+            <span className="text-[10px] text-blue-600 uppercase block font-extrabold">Step 1</span>
+            <p>1. Evidence Found</p>
+            <p className="text-[10px] text-blue-700 font-normal">Uploaded Document Chunks</p>
+          </div>
+          <div className="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs font-bold text-indigo-900 space-y-1">
+            <span className="text-[10px] text-indigo-600 uppercase block font-extrabold">Step 2</span>
+            <p>2. AI Verification</p>
+            <p className="text-[10px] text-indigo-700 font-normal">Criterion Requirement Check</p>
+          </div>
+          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-900 space-y-1">
+            <span className="text-[10px] text-rose-600 uppercase block font-extrabold">Step 3</span>
+            <p>3. Detected Gap</p>
+            <p className="text-[10px] text-rose-700 font-normal">Missing Items Identified</p>
+          </div>
+          <div className="p-3.5 rounded-2xl bg-purple-50 border border-purple-200 text-xs font-bold text-purple-900 space-y-1">
+            <span className="text-[10px] text-purple-600 uppercase block font-extrabold">Step 4</span>
+            <p>4. Recommendation</p>
+            <p className="text-[10px] text-purple-700 font-normal">Action Plan Formulated</p>
+          </div>
+          <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-900 space-y-1">
+            <span className="text-[10px] text-emerald-600 uppercase block font-extrabold">Step 5</span>
+            <p>5. Suggested Action</p>
+            <p className="text-[10px] text-emerald-700 font-normal">Ready for Faculty Upload</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 6. SIMPLE "WHY THIS RESULT?" (XAI) SECTION */}
+      <ShapVisualizer shapData={sampleShapData} />
+
+      {/* 7. AI ANALYSIS PROCESS SECTION */}
+      <AgentPipelineVisualizer onRetryAgent={handleRunAssessment} />
+
+      {/* 11. UPLOAD EXPERIENCE */}
+      <DocumentUploader onUploadSuccess={fetchDashboardData} />
+
+      {/* 13. RECOMMENDED NEXT STEPS PANEL */}
+      <div className="glass-card p-6 rounded-3xl border border-slate-200 bg-white space-y-4 shadow-xs">
+        <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+          <CheckSquare className="w-5 h-5 text-emerald-600" />
+          Recommended Next Steps for Institutional Accreditation
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+            <span className="font-extrabold text-blue-700 text-xs block">Step 1</span>
+            <p className="font-bold text-slate-900">Upload Missing Evidence for Criterion 1.2</p>
+            <p className="text-slate-600">Provide Open Elective enrolment logs and syllabus copies.</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+            <span className="font-extrabold text-purple-700 text-xs block">Step 2</span>
+            <p className="font-bold text-slate-900">Review Unverified Evidence Files</p>
+            <p className="text-slate-600">Approve pending documents in HOD and Principal queues.</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+            <span className="font-extrabold text-amber-700 text-xs block">Step 3</span>
+            <p className="font-bold text-slate-900">Upload Action Taken Report for 1.4</p>
+            <p className="text-slate-600">Attach verified Action Taken Report for stakeholder feedback.</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+            <span className="font-extrabold text-rose-700 text-xs block">Step 4</span>
+            <p className="font-bold text-slate-900">Review High-Priority Recommendations</p>
+            <p className="text-slate-600">Check the Gaps & Recommendations tab for resolution guidance.</p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-1 md:col-span-2 lg:col-span-2">
+            <span className="font-extrabold text-emerald-700 text-xs block">Step 5</span>
+            <p className="font-bold text-slate-900">Generate Updated Criterion 1 Report</p>
+            <p className="text-slate-600">Download executive PDF accreditation report with complete evidence citations.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Dashboard;

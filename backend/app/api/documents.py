@@ -7,14 +7,144 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.config import settings
 from app.api.auth import get_current_user, require_role
-from app.models.models import User, Document, CriterionAnalysis, GapItem, RecommendationItem, AuditLog, InboxMessage
+from app.models.models import User, Document, CriterionAnalysis, GapItem, RecommendationItem, AuditLog, InboxMessage, EvidenceItem, DocumentConflict, CriterionMetric
 from app.schemas.schemas import DocumentResponse, DocumentRejectionRequest, RagQueryRequest, RagQueryResult
 from app.services.ocr_service import DocumentExtractorService
 from app.services.vector_store import vector_store_service
 from app.services.rag_service import rag_service
+from app.services.metric_service import metric_service
 from app.agents.workflow import langgraph_agent_pipeline
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
+
+def process_ai_pipeline_results(doc: Document, final_state: dict, db: Session):
+    """
+    Persists all artifacts produced by the 6-Agent LangGraph AI Pipeline:
+    - Extracted Evidence Items with page-level citations
+    - Detected Document Conflicts
+    - Identified Documentation Gaps
+    - Agentic AI Recommendations
+    - Sub-Criteria Performance Scores & Readiness Indices
+    - Criterion Metrics Completeness & Missing Evidence Status
+    """
+    # 1. Save / Update Extracted Evidence Items
+    for ev_data in final_state.get("evidence_items", []):
+        metric_id = ev_data.get("metric_id")
+        ev_text = ev_data.get("evidence_text")
+        if not metric_id or not ev_text:
+            continue
+
+        existing_ev = db.query(EvidenceItem).filter(
+            EvidenceItem.document_id == doc.id,
+            EvidenceItem.metric_id == metric_id,
+            EvidenceItem.evidence_text == ev_text
+        ).first()
+
+        if not existing_ev:
+            db_ev = EvidenceItem(
+                document_id=doc.id,
+                sub_criterion=ev_data.get("sub_criterion", doc.sub_criterion),
+                metric_id=metric_id,
+                evidence_text=ev_text,
+                page_number=ev_data.get("page_number", 1),
+                confidence=ev_data.get("confidence", 90.0),
+                relevance_status=ev_data.get("relevance_status", "Relevant"),
+                verification_notes=ev_data.get("verification_notes", f"Extracted from {doc.original_name}")
+            )
+            db.add(db_ev)
+
+    # 2. Save Detected Document Conflicts
+    for c_data in final_state.get("conflicts", []):
+        conflict_title = c_data.get("conflict_title") or c_data.get("title")
+        if not conflict_title:
+            continue
+
+        existing_conflict = db.query(DocumentConflict).filter(
+            DocumentConflict.conflict_title == conflict_title
+        ).first()
+
+        if not existing_conflict:
+            db_conflict = DocumentConflict(
+                sub_criterion=c_data.get("sub_criterion", doc.sub_criterion),
+                metric_id=c_data.get("metric_id", f"{doc.sub_criterion}.1"),
+                conflict_title=conflict_title,
+                description=c_data.get("description", f"Discrepancy identified in {doc.filename}"),
+                conflicting_documents=c_data.get("conflicting_documents", doc.filename),
+                discrepancy_details=c_data.get("discrepancy_details", ""),
+                status="Open",
+                severity=c_data.get("severity", "Medium")
+            )
+            db.add(db_conflict)
+
+    # 3. Save Detected Gaps
+    for gap_data in final_state.get("detected_gaps", []):
+        gap_title = gap_data.get("title")
+        if not gap_title:
+            continue
+        existing_gap = db.query(GapItem).filter(
+            GapItem.title == gap_title,
+            GapItem.sub_criterion == gap_data.get("sub_criterion", doc.sub_criterion)
+        ).first()
+        if not existing_gap:
+            db_gap = GapItem(
+                sub_criterion=gap_data.get("sub_criterion", doc.sub_criterion),
+                title=gap_title,
+                description=gap_data.get("description", ""),
+                severity=gap_data.get("severity", "Medium"),
+                status="Open",
+                missing_evidence=gap_data.get("missing_evidence"),
+                recommended_action=gap_data.get("recommended_action")
+            )
+            db.add(db_gap)
+
+    # 4. Save AI Recommendations
+    for rec_data in final_state.get("recommendations", []):
+        rec_title = rec_data.get("title")
+        if not rec_title:
+            continue
+        existing_rec = db.query(RecommendationItem).filter(
+            RecommendationItem.title == rec_title
+        ).first()
+        if not existing_rec:
+            db_rec = RecommendationItem(
+                sub_criterion=rec_data.get("sub_criterion", doc.sub_criterion),
+                title=rec_title,
+                recommendation_text=rec_data.get("recommendation_text", ""),
+                priority=rec_data.get("priority", "Medium"),
+                shap_explanation_json=rec_data.get("shap_explanation_json"),
+                action_items=rec_data.get("action_items")
+            )
+            db.add(db_rec)
+
+    # 5. Update Sub-Criteria Analyses Scores
+    mapped_scores = final_state.get("mapped_criteria", {}).get("sub_scores", {})
+    for sub_crit, new_score in mapped_scores.items():
+        analysis = db.query(CriterionAnalysis).filter(CriterionAnalysis.sub_criterion == sub_crit).first()
+        if analysis:
+            analysis.score = round(min(100.0, (analysis.score * 0.7) + (new_score * 0.3)), 1)
+            analysis.cgpa_equivalent = round(analysis.score * 4.0 / 100, 2)
+            analysis.evidence_count += 1
+            if analysis.score >= 85:
+                analysis.readiness_level = "Excellent (A++ Grade)"
+            elif analysis.score >= 75:
+                analysis.readiness_level = "Good (A Grade)"
+            elif analysis.score >= 60:
+                analysis.readiness_level = "Satisfactory (B Grade)"
+            else:
+                analysis.readiness_level = "Needs Improvement"
+
+    db.commit()
+
+    # 6. Recalculate Completeness and Missing Evidence for all Criterion Metrics
+    metrics = db.query(CriterionMetric).all()
+    for m in metrics:
+        evidence_items = db.query(EvidenceItem).filter(EvidenceItem.metric_id == m.metric_id).all()
+        comp_res = metric_service.calculate_metric_completeness(m, evidence_items)
+        if not m.human_validation_status or "Overridden" not in m.human_validation_status:
+            m.completeness_score = comp_res["completeness_score"]
+            m.status = comp_res["status"]
+        m.missing_evidence = comp_res["missing_evidence"]
+    db.commit()
 
 def _run_ai_analysis_for_document(doc: Document, db: Session):
     """
@@ -45,59 +175,7 @@ def _run_ai_analysis_for_document(doc: Document, db: Session):
 
     try:
         final_state = langgraph_agent_pipeline.invoke(initial_state)
-
-        # Save detected gaps
-        for gap_data in final_state.get("detected_gaps", []):
-            existing_gap = db.query(GapItem).filter(
-                GapItem.title == gap_data["title"],
-                GapItem.sub_criterion == gap_data["sub_criterion"]
-            ).first()
-            if not existing_gap:
-                db_gap = GapItem(
-                    sub_criterion=gap_data["sub_criterion"],
-                    title=gap_data["title"],
-                    description=gap_data["description"],
-                    severity=gap_data["severity"],
-                    status="Open",
-                    missing_evidence=gap_data.get("missing_evidence"),
-                    recommended_action=gap_data.get("recommended_action")
-                )
-                db.add(db_gap)
-
-        # Save AI Recommendations
-        for rec_data in final_state.get("recommendations", []):
-            existing_rec = db.query(RecommendationItem).filter(
-                RecommendationItem.title == rec_data["title"]
-            ).first()
-            if not existing_rec:
-                db_rec = RecommendationItem(
-                    sub_criterion=rec_data["sub_criterion"],
-                    title=rec_data["title"],
-                    recommendation_text=rec_data["recommendation_text"],
-                    priority=rec_data["priority"],
-                    shap_explanation_json=rec_data.get("shap_explanation_json"),
-                    action_items=rec_data.get("action_items")
-                )
-                db.add(db_rec)
-
-        # Update Sub-Criteria Scores
-        mapped_scores = final_state.get("mapped_criteria", {}).get("sub_scores", {})
-        for sub_crit, new_score in mapped_scores.items():
-            analysis = db.query(CriterionAnalysis).filter(CriterionAnalysis.sub_criterion == sub_crit).first()
-            if analysis:
-                analysis.score = round(min(100.0, (analysis.score * 0.7) + (new_score * 0.3)), 1)
-                analysis.cgpa_equivalent = round(analysis.score * 4.0 / 100, 2)
-                analysis.evidence_count += 1
-                if analysis.score >= 85:
-                    analysis.readiness_level = "Excellent (A++ Grade)"
-                elif analysis.score >= 75:
-                    analysis.readiness_level = "Good (A Grade)"
-                elif analysis.score >= 60:
-                    analysis.readiness_level = "Satisfactory (B Grade)"
-                else:
-                    analysis.readiness_level = "Needs Improvement"
-
-        db.commit()
+        process_ai_pipeline_results(doc, final_state, db)
     except Exception as e:
         print(f"Error running LangGraph pipeline for {doc.filename}: {e}")
 
@@ -105,9 +183,11 @@ def _run_ai_analysis_for_document(doc: Document, db: Session):
 async def upload_document(
     file: UploadFile = File(...),
     sub_criterion: str = Form("1.1"),
+    force_duplicate: bool = Form(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    print(f"[UPLOAD START] Received upload request for file: {file.filename}, sub_criterion: {sub_criterion}, force_duplicate: {force_duplicate}")
     allowed_extensions = [".pdf", ".docx", ".doc", ".png", ".jpg", ".jpeg", ".bmp", ".tiff"]
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in allowed_extensions:
@@ -125,15 +205,36 @@ async def upload_document(
     # Calculate SHA-256 Hash for Duplicate Detection
     file_hash = DocumentExtractorService.calculate_file_hash(file_path)
     existing_hash_doc = db.query(Document).filter(Document.file_hash == file_hash).first()
-    if existing_hash_doc:
+    if existing_hash_doc and not force_duplicate:
         os.remove(file_path)
         raise HTTPException(
-            status_code=400,
-            detail=f"Exact duplicate file detected! Content is identical to existing uploaded document '{existing_hash_doc.original_name}' (ID: {existing_hash_doc.id})."
+            status_code=409,
+            detail={
+                "is_duplicate": True,
+                "existing_filename": existing_hash_doc.original_name,
+                "existing_doc_id": existing_hash_doc.id,
+                "message": f"Exact duplicate file detected! Content in '{file.filename}' is identical to existing uploaded document '{existing_hash_doc.original_name}' (ID: #{existing_hash_doc.id}). Do you still want to submit this file again as a new entry?"
+            }
         )
 
     # Step 1: Text Extraction, Page Mapping & Quality Scoring
-    extracted_text, file_type, pages_list, quality_metrics, file_hash = DocumentExtractorService.extract_text_with_pages(file_path, file.filename)
+    try:
+        extracted_text, file_type, pages_list, quality_metrics, file_hash = DocumentExtractorService.extract_text_with_pages(file_path, file.filename)
+    except ValueError as ve:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"⚠ Unable to process document: {str(ve)}"
+        )
+    except Exception as e:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"⚠ Document extraction error: {str(e)}"
+        )
+
     chunks = DocumentExtractorService.split_text_into_chunks(extracted_text)
 
     # Workflow status assignment
@@ -174,6 +275,8 @@ async def upload_document(
     db.commit()
     db.refresh(new_doc)
 
+    print(f"[UPLOAD SUCCESS] DOCUMENT ID: {new_doc.id} created for file: {new_doc.original_name}")
+
     # Step 3: Add chunks with page citations to FAISS vector store
     page_nums = [p.get("page_number", 1) for p in pages_list] if pages_list else [1] * len(chunks)
     vector_store_service.add_chunks(
@@ -185,7 +288,9 @@ async def upload_document(
     )
 
     # Run AI Analysis Pipeline IMMEDIATELY post upload so HOD/Principal review an AI-analyzed doc
+    print(f"[PROCESSING START] Running AI analysis pipeline for DOCUMENT ID: {new_doc.id}")
     _run_ai_analysis_for_document(new_doc, db)
+    print(f"[PROCESSING SUCCESS] AI analysis complete for DOCUMENT ID: {new_doc.id}")
 
     # Record in Audit Log
     audit = AuditLog(
@@ -230,7 +335,14 @@ def list_documents(
     
     # Role-based document access control
     if current_user.role == "Faculty":
-        query = query.filter(Document.user_id == current_user.id)
+        dept_str = (current_user.department or "").strip()
+        dept_prefix = dept_str.split()[0] if dept_str else ""
+        query = query.outerjoin(User, Document.user_id == User.id).filter(
+            (Document.user_id == current_user.id) |
+            (Document.user_id == None) |
+            (User.department == current_user.department) |
+            (User.department.ilike(f"%{dept_prefix}%"))
+        ).distinct()
     elif current_user.role == "HOD":
         dept_str = (current_user.department or "").strip()
         dept_prefix = dept_str.split()[0] if dept_str else ""

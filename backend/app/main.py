@@ -36,6 +36,26 @@ with engine.connect() as conn:
         except Exception:
             pass
 
+    for col_def in [
+        "sender_user_id INTEGER",
+        "recipient_email VARCHAR"
+    ]:
+        try:
+            conn.execute(text(f"ALTER TABLE inbox_messages ADD COLUMN {col_def}"))
+            conn.commit()
+        except Exception:
+            pass
+
+    for col_def in [
+        "has_logged_in BOOLEAN DEFAULT 0",
+        "login_count INTEGER DEFAULT 0"
+    ]:
+        try:
+            conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_def}"))
+            conn.commit()
+        except Exception:
+            pass
+
 # Seed Sample NAAC Criterion 1 Data
 db = SessionLocal()
 try:
@@ -49,10 +69,26 @@ app = FastAPI(
     version="1.0.0"
 )
 
+@app.on_event("startup")
+async def startup_event():
+    print("\n" + "=" * 70)
+    print("  CAMPUSINSIGHT AI - LOCALHOST ACCESS LINKS:")
+    print("  -> Frontend App:  http://localhost:5173")
+    print("  -> API Docs:      http://localhost:8000/docs")
+    print("  -> API Server:    http://127.0.0.1:8000")
+    print("=" * 70 + "\n")
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "*"
+    ],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -92,36 +92,49 @@ const EvidenceMatrixPage = () => {
     }
   };
 
+  const [statusFilter, setStatusFilter] = useState('All');
+
   const getStatusBadge = (status) => {
     switch (status) {
       case 'Complete':
+      case 'Verified':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Complete
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+            ✓ Verified
           </span>
         );
       case 'Partial':
+      case 'Needs Review':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-            <AlertTriangle className="w-3.5 h-3.5" /> Partial
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+            ⚠ Needs Review
           </span>
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-            <XCircle className="w-3.5 h-3.5" /> Missing
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">
+            ✕ Missing
           </span>
         );
     }
   };
+
+  const filteredMetrics = metrics.filter((row) => {
+    if (statusFilter === 'Verified') return row.status === 'Complete';
+    if (statusFilter === 'Needs Review') return row.status === 'Partial';
+    if (statusFilter === 'Missing') return row.status === 'Missing' || row.status === 'Incomplete';
+    if (statusFilter === 'High Priority') return row.completeness_score < 70;
+    return true;
+  });
 
   return (
     <div className="space-y-8 pb-12">
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 p-6 rounded-3xl text-white shadow-xl">
         <div>
-          <div className="flex items-center gap-2 text-blue-300 font-semibold text-xs uppercase tracking-wider mb-1">
-            <Layers className="w-4 h-4" /> NAAC Criterion 1 Evidence Matrix
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white text-blue-950 text-xs font-black shadow-md border-2 border-blue-300 mb-2">
+            <Layers className="w-4 h-4 text-blue-600 shrink-0" />
+            <span className="text-blue-950 font-black tracking-wide">NAAC Criterion 1 Evidence Matrix</span>
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight">
             Criterion 1 Metric Evidence Matrix & Page Citations
@@ -169,31 +182,39 @@ const EvidenceMatrixPage = () => {
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <div className="flex flex-wrap items-center gap-2">
           <Filter className="w-4 h-4 text-slate-500" />
-          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Filter Sub-Criterion:</span>
+          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Sub-Criterion:</span>
           {['All', '1.1', '1.2', '1.3', '1.4'].map((code) => (
             <button
               key={code}
               onClick={() => setSelectedSub(code)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 selectedSub === code
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              {code === 'All' ? 'All Metrics (1.1 - 1.4)' : `Sub-Criterion ${code}`}
+              {code === 'All' ? 'All (1.1-1.4)' : `Sub-${code}`}
             </button>
           ))}
         </div>
 
-        <button
-          onClick={fetchMatrix}
-          className="p-2 text-slate-500 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-all"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        {/* Status Filter Pills */}
+        <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+          {['All', 'Verified', 'Needs Review', 'Missing', 'High Priority'].map((st) => (
+            <button
+              key={st}
+              onClick={() => setStatusFilter(st)}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                statusFilter === st ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {st}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Main Evidence Matrix Table */}
@@ -209,16 +230,16 @@ const EvidenceMatrixPage = () => {
               <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 uppercase font-semibold">
                 <tr>
                   <th className="px-6 py-4">Metric ID</th>
-                  <th className="px-6 py-4">Metric Name & Description</th>
+                  <th className="px-6 py-4">Metric Name & Requirement</th>
                   <th className="px-6 py-4">Required Evidence</th>
                   <th className="px-6 py-4">Completeness %</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">AI Confidence</th>
+                  <th className="px-6 py-4">Evidence Status</th>
+                  <th className="px-6 py-4">Confidence</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {metrics.map((row) => (
+                {filteredMetrics.map((row) => (
                   <tr key={row.metric_id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="px-6 py-4 font-mono font-bold text-blue-700 whitespace-nowrap">
                       {row.metric_id}

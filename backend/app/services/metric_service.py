@@ -25,9 +25,9 @@ class CriterionMetricService:
         evidence_text_pool = " ".join([e.evidence_text.lower() for e in evidence_items])
 
         for req_item in req_list:
-            keywords = [k.strip().lower() for k in req_item.split() if len(k) > 3]
+            keywords = [k.strip().lower() for k in req_item.replace('&', ' ').replace('/', ' ').replace('(', ' ').replace(')', ' ').split() if len(k.strip()) >= 2]
             match_count = sum(1 for kw in keywords if kw in evidence_text_pool)
-            if match_count >= min(2, len(keywords)):
+            if match_count >= 1 and (len(keywords) == 1 or match_count >= min(2, len(keywords))):
                 found_required.append(req_item)
             else:
                 missing_required.append(req_item)
@@ -110,17 +110,17 @@ class CriterionMetricService:
         )
         overall_readiness = round(overall_readiness, 1)
 
-        # Determine NAAC Grade Equivalent
+        # Determine CampusInsight Readiness Index Level
         if overall_readiness >= 90.0:
-            readiness_grade = "A++ Grade (Excellent)"
+            readiness_grade = "High Readiness (90-100%)"
         elif overall_readiness >= 80.0:
-            readiness_grade = "A+ Grade (Very Good)"
+            readiness_grade = "Substantial Readiness (80-89%)"
         elif overall_readiness >= 70.0:
-            readiness_grade = "A Grade (Good)"
+            readiness_grade = "Moderate Readiness (70-79%)"
         elif overall_readiness >= 60.0:
-            readiness_grade = "B++ Grade (Satisfactory)"
+            readiness_grade = "Satisfactory Readiness (60-69%)"
         else:
-            readiness_grade = "Needs Improvement"
+            readiness_grade = "Needs Improvement (<60%)"
 
         # Sub-criteria group breakdown
         sub_breakdown = {}
@@ -142,6 +142,13 @@ class CriterionMetricService:
             "human_validation_avg": round(human_val_avg, 1),
             "quality_avg": round(quality_avg, 1),
             "consistency_score": round(consistency_score, 1),
+            "formula_weights": {
+                "completeness": 0.35,
+                "relevance": 0.25,
+                "human_validation": 0.20,
+                "quality": 0.10,
+                "consistency": 0.10
+            },
             "total_metrics": len(metrics),
             "total_documents": len(docs),
             "open_gaps_count": len(gaps),

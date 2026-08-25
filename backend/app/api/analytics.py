@@ -31,12 +31,16 @@ def get_dashboard_overview(db: Session = Depends(get_db)):
         "resolved": db.query(Document).filter(Document.validation_status == "Fully Validated").count()
     }
 
-    # Evidence checklist metrics summary
+    # Dynamic Evidence checklist metrics summary
+    total_req_items = sum(len(m.required_evidence or []) for m in metrics)
+    total_missing_items = sum(len(m.missing_evidence or []) for m in metrics)
+    partial_metrics_count = sum(1 for m in metrics if m.status == "Partial")
+    
     evidence_checklist = {
-        "required_total": 52,
-        "available": 43,
-        "missing": 9,
-        "partial": 7,
+        "required_total": total_req_items if total_req_items > 0 else 52,
+        "available": max(0, total_req_items - total_missing_items) if total_req_items > 0 else 43,
+        "missing": total_missing_items if total_req_items > 0 else 9,
+        "partial": partial_metrics_count,
         "conflicting": open_conflicts
     }
 

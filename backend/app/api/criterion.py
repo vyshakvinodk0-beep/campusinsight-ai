@@ -7,6 +7,7 @@ from app.models.models import User, Document, CriterionAnalysis, GapItem, Recomm
 from app.schemas.schemas import CriterionAnalysisResponse, GapItemResponse, RecommendationResponse, GapStatusUpdate
 from app.agents.workflow import langgraph_agent_pipeline
 from app.services.metric_service import metric_service
+from app.api.documents import process_ai_pipeline_results
 import uuid, time
 
 router = APIRouter(prefix="/criterion", tags=["Criterion 1"])
@@ -102,54 +103,7 @@ def trigger_reanalysis(
 
         try:
             final_state = langgraph_agent_pipeline.invoke(initial_state)
-
-            for gap_data in final_state.get("detected_gaps", []):
-                existing_gap = db.query(GapItem).filter(
-                    GapItem.title == gap_data["title"],
-                    GapItem.sub_criterion == gap_data["sub_criterion"]
-                ).first()
-                if not existing_gap:
-                    db_gap = GapItem(
-                        sub_criterion=gap_data["sub_criterion"],
-                        title=gap_data["title"],
-                        description=gap_data["description"],
-                        severity=gap_data["severity"],
-                        status="Open",
-                        missing_evidence=gap_data.get("missing_evidence"),
-                        recommended_action=gap_data.get("recommended_action")
-                    )
-                    db.add(db_gap)
-
-            for rec_data in final_state.get("recommendations", []):
-                existing_rec = db.query(RecommendationItem).filter(
-                    RecommendationItem.title == rec_data["title"]
-                ).first()
-                if not existing_rec:
-                    db_rec = RecommendationItem(
-                        sub_criterion=rec_data["sub_criterion"],
-                        title=rec_data["title"],
-                        recommendation_text=rec_data["recommendation_text"],
-                        priority=rec_data["priority"],
-                        shap_explanation_json=rec_data.get("shap_explanation_json"),
-                        action_items=rec_data.get("action_items")
-                    )
-                    db.add(db_rec)
-
-            mapped_scores = final_state.get("mapped_criteria", {}).get("sub_scores", {})
-            for sub_crit, new_score in mapped_scores.items():
-                analysis = db.query(CriterionAnalysis).filter(CriterionAnalysis.sub_criterion == sub_crit).first()
-                if analysis:
-                    analysis.score = round(min(100.0, (analysis.score * 0.8) + (new_score * 0.2)), 1)
-                    analysis.cgpa_equivalent = round(analysis.score * 4.0 / 100, 2)
-                    if analysis.score >= 85:
-                        analysis.readiness_level = "Excellent (A++ Grade)"
-                    elif analysis.score >= 75:
-                        analysis.readiness_level = "Good (A Grade)"
-                    elif analysis.score >= 60:
-                        analysis.readiness_level = "Satisfactory (B Grade)"
-                    else:
-                        analysis.readiness_level = "Needs Improvement"
-
+            process_ai_pipeline_results(doc, final_state, db)
             processed_count += 1
         except Exception as e:
             print(f"Error during re-analysis of document {doc.filename}: {e}")
@@ -196,7 +150,8 @@ def run_one_click_assessment(
             "error_message": None
         }
         try:
-            langgraph_agent_pipeline.invoke(initial_state)
+            final_state = langgraph_agent_pipeline.invoke(initial_state)
+            process_ai_pipeline_results(doc, final_state, db)
         except Exception as e:
             print(f"Assessment pipeline error for {doc.filename}: {e}")
 

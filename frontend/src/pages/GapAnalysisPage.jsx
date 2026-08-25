@@ -78,25 +78,38 @@ const GapAnalysisPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Quality Gaps */}
         <div className="p-6 rounded-2xl glass-panel border border-slate-200 bg-white shadow-xs space-y-4">
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-rose-600" />
-            Identified Documentation Gaps
-          </h3>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-600" />
+              Identified Documentation Gaps
+            </h3>
+            <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+              Faculty Explainability View
+            </span>
+          </div>
+
           {loading ? (
             <Loader2 className="w-6 h-6 text-blue-600 animate-spin mx-auto" />
           ) : gaps.length === 0 ? (
-            <p className="text-xs text-slate-500">No open gaps for Sub-Criterion {selectedSub}.</p>
+            <p className="text-xs text-emerald-700 bg-emerald-50 p-3 rounded-xl border border-emerald-200 font-semibold">
+              ✓ No open gaps for Sub-Criterion {selectedSub}. All required evidence items are verified!
+            </p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {gaps.map((g) => (
-                <div key={g.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-slate-900">[{g.sub_criterion}] {g.title}</span>
-                    <div className="flex items-center space-x-2">
+                <div key={g.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-3 shadow-2xs">
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-200/60 pb-2">
+                    <div>
+                      <span className="font-mono text-[11px] font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 mr-2">
+                        Sub-{g.sub_criterion}
+                      </span>
+                      <span className="font-bold text-slate-900 text-sm">{g.title}</span>
+                    </div>
+                    <div className="flex items-center space-x-2 shrink-0">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                         g.severity === 'High' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
                       }`}>
-                        {g.severity}
+                        {g.severity} Severity
                       </span>
                       <select
                         value={g.status || 'Open'}
@@ -113,12 +126,29 @@ const GapAnalysisPage = () => {
                       </select>
                     </div>
                   </div>
-                  <p className="text-slate-700">{g.description}</p>
+
+                  {/* Why Flagged (Faculty Explainability) */}
+                  <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200/80">
+                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                      💡 Why This Is Flagged (Faculty Explainability):
+                    </span>
+                    <p className="text-slate-700 leading-relaxed">{g.description}</p>
+                  </div>
+
+                  {/* Missing Evidence Required */}
                   {g.missing_evidence && (
-                    <p className="text-rose-700 font-bold">Missing: {g.missing_evidence}</p>
+                    <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900">
+                      <span className="font-bold block text-[11px]">📄 Missing Required Document:</span>
+                      <span className="font-semibold">{g.missing_evidence}</span>
+                    </div>
                   )}
+
+                  {/* Faculty Recommended Action */}
                   {g.recommended_action && (
-                    <p className="text-blue-700 font-bold">Recommended Action: {g.recommended_action}</p>
+                    <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900">
+                      <span className="font-bold block text-[11px]">🎯 Step-by-Step Action for Faculty:</span>
+                      <span className="font-medium">{g.recommended_action}</span>
+                    </div>
                   )}
                 </div>
               ))}

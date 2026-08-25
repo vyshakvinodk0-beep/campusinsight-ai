@@ -13,6 +13,8 @@ class User(Base):
     role = Column(String, default="Faculty") # Faculty, HOD, Principal, Administrator
     department = Column(String, default="Computer Science & Engineering")
     is_active = Column(Boolean, default=True)
+    has_logged_in = Column(Boolean, default=False)
+    login_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     documents = relationship("Document", back_populates="owner")
@@ -158,9 +160,11 @@ class InboxMessage(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     sender_name = Column(String, default="System Administrator")
+    sender_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     recipient_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    recipient_email = Column(String, nullable=True)
     recipient_role = Column(String, nullable=True) # All, Faculty, HOD, Principal, Administrator
-    category = Column(String, default="Approval") # Approval, Gap, Evidence, System
+    category = Column(String, default="Approval") # Approval, Gap, Evidence, System, Direct
     subject = Column(String, nullable=False)
     body = Column(Text, nullable=False)
     target_type = Column(String, nullable=True) # Document, Metric, Gap, Approval
@@ -205,6 +209,20 @@ class NotificationPreference(Base):
     in_app = Column(Boolean, default=True)
     email = Column(Boolean, default=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class OTPVerification(Base):
+    __tablename__ = "otp_verifications"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    email = Column(String, index=True, nullable=False)
+    otp_hash = Column(String, nullable=False)
+    purpose = Column(String, default="verification")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    attempts = Column(Integer, default=0)
+    max_attempts = Column(Integer, default=5)
+    is_used = Column(Boolean, default=False)
+
 
 
 
