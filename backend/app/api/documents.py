@@ -2,9 +2,9 @@ import os
 import shutil
 from datetime import datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, BackgroundTasks
 from sqlalchemy.orm import Session
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.core.config import settings
 from app.api.auth import get_current_user, require_role
 from app.models.models import User, Document, CriterionAnalysis, GapItem, RecommendationItem, AuditLog, InboxMessage, EvidenceItem, DocumentConflict, CriterionMetric
@@ -148,14 +148,34 @@ def process_ai_pipeline_results(doc: Document, final_state: dict, db: Session):
 
 def _run_ai_analysis_for_document(doc: Document, db: Session):
     """
-    Executes the 6-Agent LangGraph AI Pipeline immediately upon document extraction & quality check.
+    Executes the 6-Agent LangGraph AI Pipeline using RAG evidence retrieval.
+    RAG retrieves top-K relevant chunks for the document and sub-criterion,
+    avoiding sending 600-page full raw text strings directly into LLM prompts.
     """
+    # 1. Retrieve top relevant chunks for this specific document and sub-criterion via FAISS
+    retrieved_chunks_meta = vector_store_service.search(
+        query=f"NAAC Criterion 1 {doc.sub_criterion} curriculum syllabus feedback BOS ATR evidence",
+        sub_criterion=doc.sub_criterion,
+        top_k=8,
+        doc_id=doc.id
+    )
+
+    if retrieved_chunks_meta:
+        rag_context_text = "\n\n".join([
+            f"[Doc: {c['filename']} | Page {c.get('page_number', 1)} | Source: {c.get('text_source', 'TEXT')}]:\n{c['text']}"
+            for c in retrieved_chunks_meta
+        ])
+        chunk_texts = [c['text'] for c in retrieved_chunks_meta]
+    else:
+        rag_context_text = (doc.extracted_text or "")[:4000]
+        chunk_texts = [rag_context_text]
+
     initial_state = {
         "doc_id": doc.id,
         "filename": doc.filename,
         "sub_criterion_input": doc.sub_criterion,
-        "raw_text": doc.extracted_text or "",
-        "chunks": [doc.extracted_text or ""],
+        "raw_text": rag_context_text,
+        "chunks": chunk_texts,
         "quality_metrics": {
             "text_quality_score": doc.text_quality_score or 95.0,
             "ocr_quality_score": doc.ocr_quality_score or 90.0,
@@ -179,8 +199,105 @@ def _run_ai_analysis_for_document(doc: Document, db: Session):
     except Exception as e:
         print(f"Error running LangGraph pipeline for {doc.filename}: {e}")
 
+def process_document_background_task(doc_id: int):
+    """
+    Background Task Runner for Large Documents (0 to 600+ pages).
+    Executes: Batch Extraction → Selective OCR → FAISS Indexing → RAG → 6-Agent LangGraph AI Analysis.
+    Performs real-time DB progress updates for non-blocking UI polling.
+    """
+    db = SessionLocal()
+    try:
+        doc = db.query(Document).filter(Document.id == doc_id).first()
+        if not doc:
+            return
+
+        doc.processing_stage = "Extracting Text"
+        doc.processing_progress = 5.0
+        doc.status = "Processing"
+        db.commit()
+
+        def progress_callback(current_page: int, total_pages: int, stage_name: str, msg: str = ""):
+            # Map extraction progress across 5% - 65% range
+            progress_pct = round(5.0 + (current_page / max(1, total_pages)) * 60.0, 1)
+            doc.current_page_processing = current_page
+            doc.processing_stage = stage_name
+            doc.processing_progress = min(65.0, progress_pct)
+            db.commit()
+
+        # 1. Process document page-by-page / batch-by-batch
+        extracted_text, file_type, pages_list, quality_metrics, file_hash, failed_pages = DocumentExtractorService.process_document_in_batches(
+            file_path=doc.file_path,
+            filename=doc.filename,
+            batch_size=25,
+            progress_callback=progress_callback
+        )
+
+        text_pages_count = sum(1 for p in pages_list if not p.get("is_scanned", False))
+        ocr_pages_count = sum(1 for p in pages_list if p.get("is_scanned", False))
+
+        doc.extracted_text = extracted_text
+        doc.file_type = file_type
+        doc.page_count = len(pages_list) if pages_list else doc.page_count
+        doc.text_pages_count = text_pages_count
+        doc.ocr_pages_count = ocr_pages_count
+        doc.failed_pages = failed_pages if failed_pages else None
+        doc.text_quality_score = quality_metrics.get("text_quality_score", 95.0)
+        doc.ocr_quality_score = quality_metrics.get("ocr_quality_score", 90.0)
+        doc.readability_score = quality_metrics.get("readability_score", 92.0)
+        doc.is_scanned_pdf = ocr_pages_count > 0
+
+        # 2. Section & Page-aware Chunking
+        chunks_meta = DocumentExtractorService.create_page_aware_chunks(
+            pages_list=pages_list,
+            doc_id=doc.id,
+            filename=doc.filename,
+            sub_criterion=doc.sub_criterion
+        )
+        doc.chunk_count = len(chunks_meta)
+        doc.processing_stage = "FAISS Indexing"
+        doc.processing_progress = 75.0
+        db.commit()
+
+        # 3. Vector Indexing into FAISS
+        vector_store_service.add_chunks(
+            chunks=chunks_meta,
+            doc_id=doc.id,
+            filename=doc.filename,
+            sub_criterion=doc.sub_criterion
+        )
+
+        # 4. Run RAG & 6-Agent LangGraph AI Analysis
+        doc.processing_stage = "AI Analysis"
+        doc.processing_progress = 85.0
+        db.commit()
+
+        _run_ai_analysis_for_document(doc, db)
+
+        # 5. Complete Pipeline Execution
+        doc.processing_stage = "Completed"
+        doc.status = "Processed"
+        doc.processing_progress = 100.0
+        db.commit()
+
+        print(f"[BACKGROUND SUCCESS] Document #{doc.id} ({doc.filename}) successfully processed ({doc.page_count} pages, {text_pages_count} Text, {ocr_pages_count} OCR).")
+
+    except Exception as e:
+        print(f"[BACKGROUND ERROR] Document #{doc_id} background task failed: {e}")
+        try:
+            doc = db.query(Document).filter(Document.id == doc_id).first()
+            if doc:
+                doc.processing_stage = "Failed"
+                doc.status = "Failed"
+                doc.rejection_reason = f"Processing Error: {str(e)}"
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
 @router.post("/upload", response_model=DocumentResponse)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     sub_criterion: str = Form("1.1"),
     force_duplicate: bool = Form(False),
@@ -206,7 +323,10 @@ async def upload_document(
     file_hash = DocumentExtractorService.calculate_file_hash(file_path)
     existing_hash_doc = db.query(Document).filter(Document.file_hash == file_hash).first()
     if existing_hash_doc and not force_duplicate:
-        os.remove(file_path)
+        try:
+            os.remove(file_path)
+        except Exception as rm_err:
+            logger.warning(f"Temporary upload file removal skipped: {rm_err}")
         raise HTTPException(
             status_code=409,
             detail={
@@ -217,56 +337,43 @@ async def upload_document(
             }
         )
 
-    # Step 1: Text Extraction, Page Mapping & Quality Scoring
-    try:
-        extracted_text, file_type, pages_list, quality_metrics, file_hash = DocumentExtractorService.extract_text_with_pages(file_path, file.filename)
-    except ValueError as ve:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"⚠ Unable to process document: {str(ve)}"
-        )
-    except Exception as e:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"⚠ Document extraction error: {str(e)}"
-        )
-
-    chunks = DocumentExtractorService.split_text_into_chunks(extracted_text)
+    # Rapid Page Count Detection Header Inspection
+    page_count = DocumentExtractorService.get_page_count(file_path, file.filename)
 
     # Workflow status assignment
     init_hod_val = current_user.role in ["HOD", "Principal", "Administrator"]
     init_prin_val = current_user.role in ["Principal", "Administrator"]
-
     val_status = "Fully Validated" if init_prin_val else ("Pending Principal Validation" if init_hod_val else "Pending HOD Validation")
-    doc_status = "Processed"
 
-    # Step 2: Save Document record in DB
+    # Step 2: Save initial Document record in DB with "Queued" / "Processing" state
     new_doc = Document(
         filename=file.filename,
         original_name=file.filename,
         file_path=file_path,
-        file_type=file_type,
+        file_type="digital_pdf" if ext == ".pdf" else ("docx" if ext in [".docx", ".doc"] else "image"),
         file_size=file_size,
         sub_criterion=sub_criterion,
-        status=doc_status,
+        status="Processing",
         hod_validated=init_hod_val,
         hod_validated_by=current_user.full_name if init_hod_val else None,
         principal_validated=init_prin_val,
         principal_validated_by=current_user.full_name if init_prin_val else None,
         validation_status=val_status,
         rejection_reason=None,
-        extracted_text=extracted_text,
-        chunk_count=len(chunks),
+        extracted_text=None,
+        chunk_count=0,
+        page_count=page_count,
+        text_pages_count=0,
+        ocr_pages_count=0,
+        processing_stage="Queued",
+        processing_progress=0.0,
+        current_page_processing=0,
         user_id=current_user.id,
         file_hash=file_hash,
-        text_quality_score=quality_metrics.get("text_quality_score", 95.0),
-        ocr_quality_score=quality_metrics.get("ocr_quality_score", 90.0),
-        readability_score=quality_metrics.get("readability_score", 92.0),
-        is_scanned_pdf=file_type in ["scanned_pdf", "image"],
+        text_quality_score=95.0,
+        ocr_quality_score=90.0,
+        readability_score=92.0,
+        is_scanned_pdf=False,
         version=1,
         version_status="Current",
         academic_year="2024-25"
@@ -275,32 +382,17 @@ async def upload_document(
     db.commit()
     db.refresh(new_doc)
 
-    print(f"[UPLOAD SUCCESS] DOCUMENT ID: {new_doc.id} created for file: {new_doc.original_name}")
-
-    # Step 3: Add chunks with page citations to FAISS vector store
-    page_nums = [p.get("page_number", 1) for p in pages_list] if pages_list else [1] * len(chunks)
-    vector_store_service.add_chunks(
-        chunks=chunks,
-        doc_id=new_doc.id,
-        filename=new_doc.filename,
-        sub_criterion=sub_criterion,
-        page_numbers=page_nums
-    )
-
-    # Run AI Analysis Pipeline IMMEDIATELY post upload so HOD/Principal review an AI-analyzed doc
-    print(f"[PROCESSING START] Running AI analysis pipeline for DOCUMENT ID: {new_doc.id}")
-    _run_ai_analysis_for_document(new_doc, db)
-    print(f"[PROCESSING SUCCESS] AI analysis complete for DOCUMENT ID: {new_doc.id}")
+    print(f"[UPLOAD QUEUED] DOCUMENT ID: #{new_doc.id} queued for background extraction (Total Pages: {page_count})")
 
     # Record in Audit Log
     audit = AuditLog(
         user_id=current_user.id,
         user_name=current_user.full_name,
         user_role=current_user.role,
-        action="Upload & AI Analysis",
+        action="Upload Queued",
         target_type="Document",
         target_id=str(new_doc.id),
-        details=f"Uploaded '{new_doc.original_name}' for Sub-criterion {sub_criterion}. Extracted {len(chunks)} chunks, executed 6-Agent LangGraph AI Pipeline."
+        details=f"Uploaded '{new_doc.original_name}' ({page_count} pages) for Sub-criterion {sub_criterion}. Queued background extraction."
     )
     db.add(audit)
 
@@ -310,19 +402,66 @@ async def upload_document(
         recipient_role="HOD" if not init_hod_val else "Principal",
         category="Approval",
         subject=f"New Evidence Document Uploaded for Sub-{sub_criterion}",
-        body=f"Faculty member {current_user.full_name} uploaded '{new_doc.original_name}'. AI Analysis complete. Pending verification.",
+        body=f"Faculty member {current_user.full_name} uploaded '{new_doc.original_name}' ({page_count} pages). Background AI analysis initiated.",
         target_type="Document",
         target_id=str(new_doc.id)
     )
     db.add(inbox_msg)
     db.commit()
 
+    # Launch Background Processing Task
+    background_tasks.add_task(process_document_background_task, new_doc.id)
+
     resp = DocumentResponse.model_validate(new_doc)
     resp.owner_name = current_user.full_name
     resp.owner_department = current_user.department
-    if new_doc.extracted_text:
-        resp.extracted_preview = new_doc.extracted_text[:300] + ("..." if len(new_doc.extracted_text) > 300 else "")
     return resp
+
+@router.get("/{doc_id}/status")
+def get_document_processing_status(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return {
+        "id": doc.id,
+        "filename": doc.original_name or doc.filename,
+        "status": doc.status,
+        "processing_stage": doc.processing_stage or "Queued",
+        "processing_progress": doc.processing_progress or 0.0,
+        "current_page_processing": doc.current_page_processing or 0,
+        "page_count": doc.page_count or 0,
+        "text_pages_count": doc.text_pages_count or 0,
+        "ocr_pages_count": doc.ocr_pages_count or 0,
+        "failed_pages": doc.failed_pages or [],
+        "rejection_reason": doc.rejection_reason,
+        "is_scanned_pdf": doc.is_scanned_pdf or False,
+        "sub_criterion": doc.sub_criterion
+    }
+
+@router.post("/{doc_id}/retry")
+def retry_document_processing(
+    doc_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc.status = "Processing"
+    doc.processing_stage = "Queued"
+    doc.processing_progress = 0.0
+    doc.rejection_reason = None
+    db.commit()
+
+    background_tasks.add_task(process_document_background_task, doc.id)
+    return {"message": f"Document #{doc.id} processing job re-queued successfully."}
 
 @router.get("", response_model=List[DocumentResponse])
 def list_documents(

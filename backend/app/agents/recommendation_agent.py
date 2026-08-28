@@ -60,12 +60,13 @@ def recommendation_agent(state: AgentState) -> AgentState:
             })
 
     if not recommendations:
+        primary_sub = doc_analysis.get("primary_sub_criterion") or state.get("sub_criterion_input", "1.4")
         recommendations.append({
-            "sub_criterion": "1.1",
-            "title": "General NAAC Criterion 1 Best Practice Alignment",
-            "recommendation_text": "Maintain systematic digital records of all curriculum revisions, feedback analysis reports, and credit transfer approvals.",
+            "sub_criterion": primary_sub,
+            "title": f"General NAAC Sub-{primary_sub} Best Practice Alignment",
+            "recommendation_text": f"Maintain systematic digital records of all evidence documents, Action Taken Reports, and institutional ratifications for Sub-Criterion {primary_sub}.",
             "priority": "Medium",
-            "action_items": ["Conduct annual departmental curriculum audit."]
+            "action_items": [f"Conduct annual departmental audit for Sub-Criterion {primary_sub}."]
         })
 
     state["recommendations"] = recommendations

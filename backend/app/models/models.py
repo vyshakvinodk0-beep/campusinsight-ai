@@ -15,6 +15,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     has_logged_in = Column(Boolean, default=False)
     login_count = Column(Integer, default=0)
+    google_id = Column(String, unique=True, index=True, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     documents = relationship("Document", back_populates="owner")
@@ -50,6 +51,15 @@ class Document(Base):
     version = Column(Integer, default=1)
     version_status = Column(String, default="Current") # Current, Superseded, Archived, Invalid
     academic_year = Column(String, default="2024-25")
+
+    # Large Document (0-600 Pages) Incremental Processing & Progress Tracking
+    page_count = Column(Integer, default=0)
+    text_pages_count = Column(Integer, default=0)
+    ocr_pages_count = Column(Integer, default=0)
+    processing_stage = Column(String, default="Uploaded") # Uploaded, Queued, Extracting Text, OCR Processing, Chunking, FAISS Indexing, AI Analysis, Completed, Partially Completed, Failed
+    processing_progress = Column(Float, default=0.0) # 0.0 to 100.0
+    current_page_processing = Column(Integer, default=0)
+    failed_pages = Column(JSON, nullable=True)
 
     user_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="documents")

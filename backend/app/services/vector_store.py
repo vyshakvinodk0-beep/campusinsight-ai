@@ -38,7 +38,7 @@ class FAISSVectorStoreService:
 
     def add_chunks(
         self,
-        chunks: List[str],
+        chunks: List[Any],
         doc_id: int,
         filename: str,
         sub_criterion: str,
@@ -50,18 +50,36 @@ class FAISSVectorStoreService:
 
         new_entries = []
         for i, chunk in enumerate(chunks):
-            page_num = page_numbers[i] if page_numbers and i < len(page_numbers) else (i + 1)
-            metric_id = metric_ids[i] if metric_ids and i < len(metric_ids) else f"{sub_criterion}.1"
-            
-            new_entries.append({
-                "chunk_id": f"{doc_id}_{i}",
-                "doc_id": doc_id,
-                "filename": filename,
-                "sub_criterion": sub_criterion,
-                "page_number": page_num,
-                "metric_id": metric_id,
-                "text": chunk
-            })
+            if isinstance(chunk, dict):
+                entry = {
+                    "chunk_id": chunk.get("chunk_id", f"DOC{doc_id}_CHUNK_{i}"),
+                    "doc_id": doc_id,
+                    "filename": filename,
+                    "sub_criterion": sub_criterion,
+                    "page_number": chunk.get("page_number") or chunk.get("page_start", 1),
+                    "page_start": chunk.get("page_start", 1),
+                    "page_end": chunk.get("page_end", 1),
+                    "text_source": chunk.get("text_source", "TEXT"),
+                    "metric_id": chunk.get("metric_id", f"{sub_criterion}.1"),
+                    "text": chunk.get("text", "")
+                }
+            else:
+                page_num = page_numbers[i] if page_numbers and i < len(page_numbers) else (i + 1)
+                metric_id = metric_ids[i] if metric_ids and i < len(metric_ids) else f"{sub_criterion}.1"
+                entry = {
+                    "chunk_id": f"DOC{doc_id}_CHUNK_{i}",
+                    "doc_id": doc_id,
+                    "filename": filename,
+                    "sub_criterion": sub_criterion,
+                    "page_number": page_num,
+                    "page_start": page_num,
+                    "page_end": page_num,
+                    "text_source": "TEXT",
+                    "metric_id": metric_id,
+                    "text": str(chunk)
+                }
+            if entry["text"].strip():
+                new_entries.append(entry)
 
         self.documents_metadata.extend(new_entries)
         self._rebuild_index()
@@ -103,6 +121,46 @@ class FAISSVectorStoreService:
         if not self.documents_metadata or not self.is_fitted:
             return []
 
+        # Filter candidates by doc_id and sub_criterion first if doc_id is specified
+        if doc_id is not None:
+            filtered_candidates = [
+                (idx, item) for idx, item in enumerate(self.documents_metadata)
+                if item.get("doc_id") == doc_id and (
+                    sub_criterion == "All" or item.get("sub_criterion") == sub_criterion or item.get("sub_criterion") == "General"
+                )
+            ]
+            if not filtered_candidates:
+                # Fallback: ignore sub_criterion filter if strict match gave 0
+                filtered_candidates = [
+                    (idx, item) for idx, item in enumerate(self.documents_metadata)
+                    if item.get("doc_id") == doc_id
+                ]
+
+            if not filtered_candidates:
+                return []
+
+            query_vec = self.vectorizer.transform([query]).toarray().astype('float32')
+            dim = query_vec.shape[1]
+            if dim < 512:
+                padding = np.zeros((1, 512 - dim), dtype='float32')
+                query_vec = np.hstack([query_vec, padding])
+            elif dim > 512:
+                query_vec = query_vec[:, :512]
+
+            # Compute similarity directly for candidate indices
+            cand_indices = [c[0] for c in filtered_candidates]
+            cand_items = [c[1] for c in filtered_candidates]
+            
+            if self.index is not None and self.index.ntotal > max(cand_indices):
+                # Calculate distances for candidate vectors
+                cand_vectors = np.array([self.index.reconstruct(i) for i in cand_indices], dtype='float32')
+                # L2 distance
+                dists = np.linalg.norm(cand_vectors - query_vec, axis=1)
+                sorted_pairs = sorted(zip(dists, cand_items), key=lambda x: x[0])
+                return [item for _, item in sorted_pairs[:top_k]]
+            else:
+                return cand_items[:top_k]
+
         query_vec = self.vectorizer.transform([query]).toarray().astype('float32')
         dim = query_vec.shape[1]
         if dim < 512:
@@ -118,8 +176,6 @@ class FAISSVectorStoreService:
         for idx in indices[0]:
             if 0 <= idx < len(self.documents_metadata):
                 item = self.documents_metadata[idx]
-                if doc_id is not None and item.get("doc_id") != doc_id:
-                    continue
                 if sub_criterion == "All" or item["sub_criterion"] == sub_criterion or item["sub_criterion"] == "General":
                     results.append(item)
                     if len(results) >= top_k:

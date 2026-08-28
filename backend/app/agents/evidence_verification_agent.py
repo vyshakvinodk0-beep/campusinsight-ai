@@ -27,15 +27,20 @@ def rule_based_extract_evidence(raw_text: str, sub_criterion: str, filename: str
     if not paragraphs:
         paragraphs = [raw_text] if raw_text else ["Verified institutional document evidence."]
 
+    import re
     for metric_id, keywords in metric_keywords.items():
         if sub_criterion and sub_criterion != "All" and not metric_id.startswith(sub_criterion):
             continue
         
         matched_para = None
+        matched_page = 1
         for para in paragraphs:
             para_lower = para.lower()
             if any(kw in para_lower for kw in keywords):
                 matched_para = para
+                pg_match = re.search(r"Page\s+(\d+)", para)
+                if pg_match:
+                    matched_page = int(pg_match.group(1))
                 break
 
         if matched_para:
@@ -43,22 +48,24 @@ def rule_based_extract_evidence(raw_text: str, sub_criterion: str, filename: str
                 "metric_id": metric_id,
                 "sub_criterion": metric_id[:3],
                 "evidence_text": matched_para[:350],
-                "page_number": 1,
+                "page_number": matched_page,
                 "confidence": 92.0,
                 "relevance_status": "Relevant",
-                "verification_notes": f"Extracted evidence snippet matching Metric {metric_id} from {filename}."
+                "verification_notes": f"Extracted evidence snippet matching Metric {metric_id} from {filename} (Page {matched_page})."
             })
 
     if not evidence_items:
         default_metric = f"{sub_criterion}.1" if sub_criterion in ["1.1", "1.2", "1.3", "1.4"] else "1.1.1"
+        pg_match = re.search(r"Page\s+(\d+)", paragraphs[0]) if paragraphs else None
+        p_num = int(pg_match.group(1)) if pg_match else 1
         evidence_items.append({
             "metric_id": default_metric,
             "sub_criterion": sub_criterion if sub_criterion in ["1.1", "1.2", "1.3", "1.4"] else "1.1",
             "evidence_text": paragraphs[0][:300],
-            "page_number": 1,
+            "page_number": p_num,
             "confidence": 88.0,
             "relevance_status": "Relevant",
-            "verification_notes": f"Rule-based evidence extraction completed for {filename}."
+            "verification_notes": f"Rule-based evidence extraction completed for {filename} (Page {p_num})."
         })
 
     return evidence_items

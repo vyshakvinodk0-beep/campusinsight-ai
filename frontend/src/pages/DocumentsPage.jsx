@@ -1,25 +1,81 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { documentAPI, reportAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import DocumentUploader from '../components/DocumentUploader';
 import PrincipalValidationModal from '../components/PrincipalValidationModal';
-import { FileText, Trash2, Eye, Filter, Loader2, CheckCircle, ShieldCheck, XCircle, AlertCircle, Download } from 'lucide-react';
+import {
+  FileText,
+  Plus,
+  Trash2,
+  Eye,
+  Filter,
+  Loader2,
+  CheckCircle,
+  ShieldCheck,
+  XCircle,
+  AlertCircle,
+  Download,
+  Layers,
+  Clock,
+  Sparkles,
+  UploadCloud
+} from 'lucide-react';
 
 const DocumentsPage = () => {
   const { user } = useAuth();
+  const uploaderRef = useRef(null);
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [subCriterion, setSubCriterion] = useState('All');
   const [validationFilter, setValidationFilter] = useState('All');
+
   const [previewDoc, setPreviewDoc] = useState(null);
   const [rejectingDoc, setRejectingDoc] = useState(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [processingId, setProcessingId] = useState(null);
   const [downloadingDocId, setDownloadingDocId] = useState(null);
   const [confirmHodModalDoc, setConfirmHodModalDoc] = useState(null);
-  const [confirmPrincipalModalDoc, setConfirmPrincipalModalDoc] = useState(null);
   const [principalModalDoc, setPrincipalModalDoc] = useState(null);
   const [actionType, setActionType] = useState('reject');
+
+  const fetchDocuments = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
+    try {
+      const res = await documentAPI.list(subCriterion, validationFilter);
+      setDocuments(res.data);
+    } catch (err) {
+      console.error("Failed to list documents:", err);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDocuments(true);
+    const timer = setInterval(() => {
+      setDocuments((prevDocs) => {
+        const hasProcessing = prevDocs.some(
+          (d) =>
+            d.status === 'Processing' ||
+            d.processing_stage === 'Extracting Text' ||
+            d.processing_stage === 'OCR Processing' ||
+            d.processing_stage === 'FAISS Indexing' ||
+            d.processing_stage === 'AI Analysis'
+        );
+        if (hasProcessing) {
+          fetchDocuments(false);
+        }
+        return prevDocs;
+      });
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [subCriterion, validationFilter]);
+
+  const scrollToUploader = () => {
+    if (uploaderRef.current) {
+      uploaderRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   const handleDownloadDocPdf = async (doc) => {
     setDownloadingDocId(doc.id);
@@ -28,7 +84,10 @@ const DocumentsPage = () => {
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `CampusInsight_Report_Doc_${doc.id}_${(doc.original_name || doc.filename).replace(/\s+/g, '_')}.pdf`);
+      link.setAttribute(
+        'download',
+        `CampusInsight_Report_Doc_${doc.id}_${(doc.original_name || doc.filename).replace(/\s+/g, '_')}.pdf`
+      );
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -51,26 +110,12 @@ const DocumentsPage = () => {
     }
   };
 
-  const fetchDocuments = async () => {
-    setLoading(true);
+  const handleApproveHodConfirm = async () => {
+    if (!confirmHodModalDoc) return;
+    setProcessingId(confirmHodModalDoc.id);
     try {
-      const res = await documentAPI.list(subCriterion, validationFilter);
-      setDocuments(res.data);
-    } catch (err) {
-      console.error("Failed to list documents:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDocuments();
-  }, [subCriterion, validationFilter]);
-
-  const handleValidateHod = async (id) => {
-    setProcessingId(id);
-    try {
-      await documentAPI.validateHod(id);
+      await documentAPI.validateHod(confirmHodModalDoc.id);
+      setConfirmHodModalDoc(null);
       fetchDocuments();
     } catch (err) {
       console.error("HOD validation failed:", err);
@@ -79,43 +124,20 @@ const DocumentsPage = () => {
     }
   };
 
-  const handleRejectHodSubmit = async () => {
+  const handleActionSubmit = async () => {
     if (!rejectingDoc || !rejectionReason.trim()) return;
     setProcessingId(rejectingDoc.id);
     try {
-      await documentAPI.rejectHod(rejectingDoc.id, rejectionReason);
+      if (actionType === 'revision') {
+        await documentAPI.rejectHod(rejectingDoc.id, `[Revision Requested] ${rejectionReason}`);
+      } else {
+        await documentAPI.rejectHod(rejectingDoc.id, rejectionReason);
+      }
       setRejectingDoc(null);
       setRejectionReason('');
       fetchDocuments();
     } catch (err) {
-      console.error("HOD rejection failed:", err);
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleValidatePrincipal = async (id) => {
-    setProcessingId(id);
-    try {
-      await documentAPI.validatePrincipal(id);
-      fetchDocuments();
-    } catch (err) {
-      console.error("Principal validation failed:", err);
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleRejectPrincipalSubmit = async () => {
-    if (!rejectingDoc || !rejectionReason.trim()) return;
-    setProcessingId(rejectingDoc.id);
-    try {
-      await documentAPI.rejectPrincipal(rejectingDoc.id, rejectionReason);
-      setRejectingDoc(null);
-      setRejectionReason('');
-      fetchDocuments();
-    } catch (err) {
-      console.error("Principal rejection failed:", err);
+      console.error("Action submit failed:", err);
     } finally {
       setProcessingId(null);
     }
@@ -131,69 +153,109 @@ const DocumentsPage = () => {
     }
   };
 
+  // KPI Calculations
+  const totalCount = documents.length;
+  const processingCount = documents.filter(
+    (d) => d.status === 'Processing' || (d.processing_stage && d.processing_stage !== 'Completed' && d.processing_stage !== 'Failed')
+  ).length;
+  const pendingCount = documents.filter((d) => d.validation_status && d.validation_status.includes('Pending')).length;
+  const validatedCount = documents.filter((d) => d.validation_status === 'Fully Validated').length;
+
   return (
-    <div className="space-y-8 pb-12">
-      {/* Page Title Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="space-y-7 pb-12">
+      {/* 1. Page Title Header & Top-Right Primary Upload Button */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <FileText className="w-6 h-6 text-blue-600" />
-            Institutional Document Vault ({user?.role} Portal)
+          <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
+            <div className="p-2 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100">
+              <FileText className="w-6 h-6" />
+            </div>
+            <span>My Evidence Portal</span>
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-mono">
+              {user?.role || 'Faculty'}
+            </span>
           </h1>
-          <p className="text-xs text-slate-500 mt-1 font-medium">
-            Strict multi-role academic validation pipeline: Faculty Submission → HOD Department Review → Principal Institutional Approval → Agentic AI Analysis.
+          <p className="text-xs text-slate-500 mt-1 font-medium leading-relaxed">
+            Upload, manage and analyze your institutional accreditation evidence documents (SSR, AQAR, Syllabus, BOS Minutes, Feedback ATRs).
           </p>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center space-x-1">
-            <Filter className="w-3.5 h-3.5 text-slate-500" />
-            <select
-              value={subCriterion}
-              onChange={(e) => setSubCriterion(e.target.value)}
-              className="px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-800 text-xs font-semibold focus:outline-none shadow-xs"
-            >
-              <option value="All">All Sub-Criteria</option>
-              <option value="1.1">1.1 Curriculum Design</option>
-              <option value="1.2">1.2 Academic Flexibility</option>
-              <option value="1.3">1.3 Curriculum Enrichment</option>
-              <option value="1.4">1.4 Feedback System</option>
-            </select>
-          </div>
+        {/* Primary CTA Upload Action - Visible Immediately at Top Right */}
+        <button
+          onClick={scrollToUploader}
+          className="px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md flex items-center justify-center space-x-2 transition-all cursor-pointer hover:shadow-lg shrink-0 border border-blue-400/30 active:scale-98"
+        >
+          <Plus className="w-4 h-4 text-white stroke-[3]" />
+          <span>+ Upload Evidence</span>
+        </button>
+      </div>
 
-          <select
-            value={validationFilter}
-            onChange={(e) => setValidationFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-xl bg-white border border-slate-300 text-slate-800 text-xs font-semibold focus:outline-none shadow-xs"
-          >
-            <option value="All">All Validation States</option>
-            <option value="Pending HOD Validation">Pending HOD Validation</option>
-            <option value="Pending Principal Validation">Pending Principal Validation</option>
-            <option value="Fully Validated">Fully Validated</option>
-            <option value="Rejected by HOD">Rejected by HOD</option>
-            <option value="Rejected by Principal">Rejected by Principal</option>
-          </select>
+      {/* 2. RESTORED COMPLETE UPLOAD INSTITUTIONAL EVIDENCE SECTION */}
+      <div ref={uploaderRef}>
+        <DocumentUploader onUploadSuccess={fetchDocuments} />
+      </div>
+
+      {/* 3. Status & Evidence KPI Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center space-x-3">
+          <div className="p-3 rounded-xl bg-blue-50 text-blue-600">
+            <Layers className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Evidence</p>
+            <p className="text-xl font-black text-slate-900">{totalCount}</p>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center space-x-3">
+          <div className="p-3 rounded-xl bg-amber-50 text-amber-600">
+            <Clock className="w-5 h-5 animate-pulse" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Processing</p>
+            <p className="text-xl font-black text-amber-900">{processingCount}</p>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center space-x-3">
+          <div className="p-3 rounded-xl bg-purple-50 text-purple-600">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Pending Review</p>
+            <p className="text-xl font-black text-purple-900">{pendingCount}</p>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center space-x-3">
+          <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600">
+            <CheckCircle className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Validated</p>
+            <p className="text-xl font-black text-emerald-900">{validatedCount}</p>
+          </div>
         </div>
       </div>
 
-      {/* Document Uploader - Accessible to Faculty, HOD, Principal, Admin */}
-      <DocumentUploader onUploadSuccess={fetchDocuments} />
-
-      <div className="glass-panel p-5 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+      {/* 4. Vault Document Table / Recent Evidence */}
+      <div className="glass-panel p-5 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div className="flex items-center space-x-2">
-            <Filter className="w-4 h-4 text-blue-600" />
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Vault Document Filters</span>
+            <FileText className="w-4 h-4 text-blue-600" />
+            <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider">
+              Recent Evidence Repository
+            </h3>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center space-x-2">
-              <label className="text-xs text-slate-500 font-medium">Sub-Criterion:</label>
+          {/* Sub-Criterion & Workflow Status Filters */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center space-x-1.5">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
               <select
                 value={subCriterion}
                 onChange={(e) => setSubCriterion(e.target.value)}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
+                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
               >
                 <option value="All">All Sub-Criteria</option>
                 <option value="1.1">Sub-1.1: Curriculum Design</option>
@@ -203,22 +265,19 @@ const DocumentsPage = () => {
               </select>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <label className="text-xs text-slate-500 font-medium">Workflow Status:</label>
-              <select
-                value={validationFilter}
-                onChange={(e) => setValidationFilter(e.target.value)}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
-              >
-                <option value="All">All Statuses</option>
-                <option value="Pending HOD Validation">Pending HOD Validation</option>
-                <option value="Pending Principal Validation">Pending Principal Validation</option>
-                <option value="Fully Validated">Fully Validated</option>
-                <option value="Revision Requested">Revision Requested</option>
-                <option value="Rejected by HOD">Rejected by HOD</option>
-                <option value="Rejected by Principal">Rejected by Principal</option>
-              </select>
-            </div>
+            <select
+              value={validationFilter}
+              onChange={(e) => setValidationFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
+            >
+              <option value="All">All Validation Statuses</option>
+              <option value="Pending HOD Validation">Pending HOD Review</option>
+              <option value="Pending Principal Validation">Pending Principal Approval</option>
+              <option value="Fully Validated">Fully Validated</option>
+              <option value="Revision Requested">Revision Requested</option>
+              <option value="Rejected by HOD">Rejected by HOD</option>
+              <option value="Rejected by Principal">Rejected by Principal</option>
+            </select>
           </div>
         </div>
 
@@ -228,20 +287,28 @@ const DocumentsPage = () => {
             <span className="text-xs font-medium">Loading Vault Documents...</span>
           </div>
         ) : documents.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 text-xs font-medium bg-slate-50 rounded-xl border border-dashed border-slate-200">
-            No evidence documents match your selected filter.
+          <div className="py-12 text-center space-y-3 bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-6">
+            <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+              <UploadCloud className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-slate-800">No institutional evidence documents uploaded yet.</p>
+              <p className="text-[11px] text-slate-500">
+                Use the upload section above to submit evidence for Criterion 1 analysis.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50/70">
-                  <th className="py-3 px-3">Document Details</th>
-                  <th className="py-3 px-3">Scope</th>
-                  <th className="py-3 px-3">Quality Scores</th>
-                  <th className="py-3 px-3">Stage 1: HOD Review</th>
-                  <th className="py-3 px-3">Stage 2: Principal Approval</th>
-                  <th className="py-3 px-3">Workflow Status</th>
+                  <th className="py-3 px-3">Document</th>
+                  <th className="py-3 px-3">Sub-Criterion</th>
+                  <th className="py-3 px-3">Uploaded By</th>
+                  <th className="py-3 px-3">Date</th>
+                  <th className="py-3 px-3">Processing Status</th>
+                  <th className="py-3 px-3">Validation Status</th>
                   <th className="py-3 px-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -250,19 +317,16 @@ const DocumentsPage = () => {
                   <tr key={doc.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-3.5 px-3">
                       <div className="flex items-start space-x-3">
-                        <div className="p-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 mt-0.5">
+                        <div className="p-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 mt-0.5 shrink-0">
                           <FileText className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900 leading-snug">{doc.original_name || doc.filename}</p>
-                          <p className="text-[10px] text-slate-400 font-medium">
-                            ID: #{doc.id} | Size: {(doc.file_size / 1024).toFixed(1)} KB | Uploaded: {new Date(doc.upload_date).toLocaleDateString()}
+                          <p className="font-bold text-slate-900 leading-snug">
+                            {doc.original_name || doc.filename}
                           </p>
-                          {doc.owner_name && (
-                            <p className="text-[10px] text-slate-500 mt-0.5">
-                              Owner: <span className="font-semibold text-slate-700">{doc.owner_name}</span> ({doc.owner_department})
-                            </p>
-                          )}
+                          <p className="text-[10px] text-slate-400 font-medium">
+                            ID: #{doc.id} | Size: {(doc.file_size / 1024).toFixed(1)} KB | {doc.page_count || 1} pgs ({doc.text_pages_count || 0} Text / {doc.ocr_pages_count || 0} OCR)
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -273,116 +337,76 @@ const DocumentsPage = () => {
                       </span>
                     </td>
 
-                    <td className="py-3.5 px-3">
-                      <div className="space-y-1 text-[10px]">
-                        <div className="flex justify-between items-center w-32">
-                          <span className="text-slate-500">Text Quality:</span>
-                          <span className="font-bold text-blue-700">{doc.text_quality_score}%</span>
-                        </div>
-                        <div className="flex justify-between items-center w-32">
-                          <span className="text-slate-500">OCR Quality:</span>
-                          <span className="font-bold text-emerald-700">{doc.ocr_quality_score}%</span>
-                        </div>
-                        <div className="flex justify-between items-center w-32">
-                          <span className="text-slate-500">Readability:</span>
-                          <span className="font-bold text-purple-700">{doc.readability_score}%</span>
-                        </div>
+                    <td className="py-3.5 px-3 text-slate-700">
+                      <div>
+                        <p className="font-bold text-slate-800">{doc.owner_name || 'Faculty User'}</p>
+                        <p className="text-[10px] text-slate-400">{doc.owner_department || 'Computer Science'}</p>
                       </div>
                     </td>
 
-                    <td className="py-3.5 px-3">
-                      {doc.hod_validated ? (
-                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-[10px] flex items-center gap-1 w-fit">
-                          <CheckCircle className="w-3 h-3 text-emerald-600" />
-                          Validated ({doc.hod_validated_by || 'HOD'})
-                        </span>
-                      ) : doc.validation_status === 'Rejected by HOD' ? (
-                        <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 font-bold text-[10px] flex items-center gap-1 w-fit">
-                          <XCircle className="w-3 h-3 text-rose-600" />
-                          Rejected
-                        </span>
-                      ) : doc.validation_status === 'Revision Requested' ? (
-                        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 font-bold text-[10px] flex items-center gap-1 w-fit">
-                          <AlertCircle className="w-3 h-3 text-amber-600" />
-                          Revision Requested
-                        </span>
-                      ) : ['HOD', 'Principal', 'Administrator'].includes(user?.role) ? (
-                        <div className="flex items-center space-x-1">
-                          <button
-                            onClick={() => setConfirmHodModalDoc(doc)}
-                            disabled={processingId === doc.id}
-                            className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] cursor-pointer"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => { setRejectingDoc(doc); setActionType('revision'); setRejectionReason(''); }}
-                            disabled={processingId === doc.id}
-                            className="px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold text-[10px] cursor-pointer"
-                          >
-                            Revision
-                          </button>
-                          <button
-                            onClick={() => { setRejectingDoc(doc); setActionType('reject'); setRejectionReason(''); }}
-                            disabled={processingId === doc.id}
-                            className="px-2 py-1 rounded bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold text-[10px] cursor-pointer"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 font-medium">Pending HOD</span>
-                      )}
+                    <td className="py-3.5 px-3 text-slate-600 font-medium text-[11px]">
+                      {new Date(doc.upload_date).toLocaleDateString()}
                     </td>
 
                     <td className="py-3.5 px-3">
-                      {doc.principal_validated ? (
-                        <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200 font-bold text-[10px] flex items-center gap-1 w-fit">
-                          <ShieldCheck className="w-3 h-3 text-purple-600" />
-                          Approved ({doc.principal_validated_by || 'Principal'})
-                        </span>
-                      ) : doc.validation_status === 'Rejected by Principal' ? (
-                        <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 font-bold text-[10px] flex items-center gap-1 w-fit">
-                          <XCircle className="w-3 h-3 text-rose-600" />
-                          Rejected
-                        </span>
-                      ) : doc.validation_status === 'Revision Requested by Principal' ? (
-                        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 font-bold text-[10px] flex items-center gap-1 w-fit">
-                          <AlertCircle className="w-3 h-3 text-amber-600" />
-                          Revision Requested
-                        </span>
-                      ) : ['Principal', 'Administrator'].includes(user?.role) && doc.validation_status === 'Pending Principal Validation' ? (
-                        <div className="flex items-center space-x-1">
-                          <button
-                            onClick={() => setPrincipalModalDoc(doc)}
-                            className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] cursor-pointer shadow-xs flex items-center gap-1"
-                            title="Review Evidence & Perform Institutional Validation"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            <span>Review & Validate</span>
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 font-medium">
-                          {doc.hod_validated ? 'Pending Principal' : 'Awaiting Stage 1'}
-                        </span>
-                      )}
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border block w-fit ${
+                        doc.processing_stage === 'Completed' || doc.status === 'Processed'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : doc.processing_stage === 'Failed'
+                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        {doc.processing_stage || doc.status || 'Processed'}
+                      </span>
                     </td>
 
                     <td className="py-3.5 px-3">
                       <div className="space-y-1">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border block w-fit ${
-                          doc.validation_status === 'Fully Validated' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
-                          doc.validation_status === 'Pending Principal Validation' ? 'bg-purple-100 text-purple-800 border-purple-200' :
-                          doc.validation_status.includes('Revision') ? 'bg-amber-100 text-amber-800 border-amber-200' :
-                          doc.validation_status.includes('Rejected') ? 'bg-rose-100 text-rose-800 border-rose-200' :
-                          'bg-blue-100 text-blue-800 border-blue-200'
-                        }`}>
-                          {doc.validation_status}
-                        </span>
-                        <span className="text-[9px] text-slate-400 block font-mono">
-                          Tech State: {doc.status || 'Processed'}
-                        </span>
+                        {doc.validation_status === 'Fully Validated' ? (
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-[10px] flex items-center gap-1 w-fit">
+                            <CheckCircle className="w-3 h-3 text-emerald-600" />
+                            Fully Validated
+                          </span>
+                        ) : doc.validation_status === 'Pending Principal Validation' ? (
+                          <div className="flex items-center space-x-1.5">
+                            <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200 font-bold text-[10px] flex items-center gap-1 w-fit">
+                              <ShieldCheck className="w-3 h-3 text-purple-600" />
+                              Pending Principal
+                            </span>
+                            {['Principal', 'Administrator'].includes(user?.role) && (
+                              <button
+                                onClick={() => setPrincipalModalDoc(doc)}
+                                className="px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] cursor-pointer"
+                              >
+                                Validate
+                              </button>
+                            )}
+                          </div>
+                        ) : doc.validation_status?.includes('Revision') ? (
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-bold text-[10px] flex items-center gap-1 w-fit">
+                            <AlertCircle className="w-3 h-3 text-amber-600" />
+                            Revision Requested
+                          </span>
+                        ) : doc.validation_status?.includes('Rejected') ? (
+                          <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200 font-bold text-[10px] flex items-center gap-1 w-fit">
+                            <XCircle className="w-3 h-3 text-rose-600" />
+                            Rejected
+                          </span>
+                        ) : (
+                          <div className="flex items-center space-x-1.5">
+                            <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200 font-bold text-[10px] w-fit">
+                              Pending HOD
+                            </span>
+                            {['HOD', 'Principal', 'Administrator'].includes(user?.role) && (
+                              <button
+                                onClick={() => setConfirmHodModalDoc(doc)}
+                                className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] cursor-pointer"
+                              >
+                                Approve
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </td>
 
@@ -406,7 +430,8 @@ const DocumentsPage = () => {
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      {(user?.role === 'Administrator' || (user?.role === 'Faculty' && doc.user_id === user?.id && !doc.principal_validated)) && (
+                      {(user?.role === 'Administrator' ||
+                        (user?.role === 'Faculty' && doc.user_id === user?.id && !doc.principal_validated)) && (
                         <button
                           onClick={() => handleDelete(doc.id)}
                           className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-rose-600 border border-slate-200 cursor-pointer"
@@ -424,6 +449,38 @@ const DocumentsPage = () => {
         )}
       </div>
 
+      {/* 5. Recommended Next Steps Guidance Section */}
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white space-y-3 shadow-md">
+        <div className="flex items-center space-x-2 text-amber-400">
+          <Sparkles className="w-5 h-5" />
+          <h3 className="text-sm font-bold uppercase tracking-wider">Recommended Next Steps for Institutional Evidence</h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+          <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
+            <p className="font-bold text-blue-300">1. Review Feedback ATRs</p>
+            <p className="text-slate-300 text-[11px]">
+              Ensure Sub-Criterion 1.4 includes formal Action Taken Reports (ATRs) with Academic Council signatures.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
+            <p className="font-bold text-indigo-300">2. Verify HOD Department Review</p>
+            <p className="text-slate-300 text-[11px]">
+              HODs must validate faculty submissions before final Principal institutional approval.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
+            <p className="font-bold text-purple-300">3. Generate Comprehensive Report</p>
+            <p className="text-slate-300 text-[11px]">
+              Export institution-wide NAAC Criterion 1 PDF reports from the Analytics & Reports tab.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Confirm HOD Modal */}
       {confirmHodModalDoc && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-2xl">
@@ -438,7 +495,6 @@ const DocumentsPage = () => {
             <div className="space-y-2 text-xs text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200">
               <p><b>Document:</b> {confirmHodModalDoc.original_name}</p>
               <p><b>Sub-Criterion:</b> Sub-{confirmHodModalDoc.sub_criterion}</p>
-              <p><b>Current Status:</b> <span className="text-amber-700 font-semibold">{confirmHodModalDoc.validation_status}</span></p>
               <p><b>New Status:</b> <span className="text-purple-700 font-semibold">Pending Principal Validation</span></p>
             </div>
 
@@ -461,48 +517,7 @@ const DocumentsPage = () => {
         </div>
       )}
 
-      {confirmPrincipalModalDoc && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-purple-600" />
-                Final Institutional Approval
-              </h3>
-              <button onClick={() => setConfirmPrincipalModalDoc(null)} className="text-slate-400 hover:text-slate-700">✕</button>
-            </div>
-
-            <p className="text-xs text-slate-600">
-              Are you sure you want to approve this evidence document at the institutional level?
-            </p>
-
-            <div className="space-y-2 text-xs text-slate-700 bg-purple-50 p-4 rounded-xl border border-purple-200">
-              <p><b>Document:</b> {confirmPrincipalModalDoc.original_name}</p>
-              <p><b>Department:</b> {confirmPrincipalModalDoc.owner_department || 'Computer Science & Engg'}</p>
-              <p><b>Criterion Scope:</b> Criterion 1 (Curricular Aspects)</p>
-              <p><b>Stage 1 HOD Validation:</b> <span className="text-emerald-700 font-semibold">Completed ({confirmPrincipalModalDoc.hod_validated_by || 'HOD'})</span></p>
-              <p><b>New Status:</b> <span className="text-purple-800 font-bold">Fully Validated</span></p>
-            </div>
-
-            <div className="flex justify-end space-x-2 pt-2">
-              <button
-                onClick={() => setConfirmPrincipalModalDoc(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs hover:bg-slate-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleApprovePrincipalConfirm}
-                disabled={processingId === confirmPrincipalModalDoc.id}
-                className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs"
-              >
-                {processingId === confirmPrincipalModalDoc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Approval'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Preview Text Modal */}
       {previewDoc && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-2xl glass-panel bg-white rounded-2xl border border-slate-200 p-6 space-y-4 max-h-[80vh] flex flex-col shadow-2xl">
@@ -517,6 +532,7 @@ const DocumentsPage = () => {
         </div>
       )}
 
+      {/* Rejection / Revision Modal */}
       {rejectingDoc && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-2xl">
@@ -563,12 +579,6 @@ const DocumentsPage = () => {
                 </button>
               </div>
 
-              <p className="text-xs text-slate-600">
-                {actionType === 'revision'
-                  ? `Request faculty revision for ${rejectingDoc.original_name}. The document status will change to 'Revision Requested'.`
-                  : `Reject evidence ${rejectingDoc.original_name}. Mandatory feedback reason required.`}
-              </p>
-
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                   {actionType === 'revision' ? 'Revision Details / Required Additions' : 'Rejection Reason'} *
@@ -614,7 +624,7 @@ const DocumentsPage = () => {
         </div>
       )}
 
-      {/* Principal Evidence Review & Validation Summary Modal */}
+      {/* Principal Validation Modal */}
       {principalModalDoc && (
         <PrincipalValidationModal
           docObj={principalModalDoc}

@@ -23,6 +23,19 @@ class GoogleLoginRequest(BaseModel):
     role: Optional[str] = "Faculty"
     department: Optional[str] = "Computer Science & Engineering"
 
+class GoogleOAuthRequest(BaseModel):
+    token: Optional[str] = None
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+    google_id: Optional[str] = None
+
+class GoogleRegisterRequest(BaseModel):
+    email: EmailStr
+    full_name: str
+    department: Optional[str] = "Computer Science & Engineering"
+    token: Optional[str] = None
+
+
 
 
 class Token(BaseModel):

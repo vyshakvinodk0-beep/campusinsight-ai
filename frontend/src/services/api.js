@@ -4,7 +4,7 @@ const API_BASE = '/api';
 
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 10000,
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -24,6 +24,9 @@ export const authAPI = {
   sendOtp: (email, purpose = 'verification') => api.post('/auth/send-otp', { email, purpose }),
   verifyOtp: (email, otp, purpose = 'verification', autoLogin = false) => api.post('/auth/verify-otp', { email, otp, purpose, auto_login: autoLogin }),
   checkGoogleEmail: (email) => api.post('/auth/google-check-email', { email }),
+  googleOAuth: (payload) => api.post('/auth/google-oauth', payload),
+  googleRegister: (email, fullName, department = 'Computer Science & Engineering', token = null) =>
+    api.post('/auth/google-register', { email, full_name: fullName, department, token }),
   googleLogin: (email, fullName = 'Google User', role = 'Faculty', department = 'Computer Science & Engineering', token = null) =>
     api.post('/auth/google-login', { email, full_name: fullName, role, department, token }),
   requestPasswordReset: (email) => api.post('/auth/request-password-reset', { email }),
@@ -39,9 +42,12 @@ export const authAPI = {
 
 export const documentAPI = {
   upload: (formData) => api.post('/documents/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300000 // 5 minutes timeout for document upload & processing initiation
   }),
   list: (subCriterion = 'All', validationStatus = 'All') => api.get(`/documents?sub_criterion=${subCriterion}&validation_status=${validationStatus}`),
+  getStatus: (id) => api.get(`/documents/${id}/status`),
+  retryProcessing: (id) => api.post(`/documents/${id}/retry`),
   getValidationSummary: (id) => api.get(`/documents/${id}/validation-summary`),
   validateHod: (id) => api.post(`/documents/${id}/validate-hod`),
   rejectHod: (id, rejection_reason) => api.post(`/documents/${id}/reject-hod`, { rejection_reason }),
