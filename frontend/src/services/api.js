@@ -42,12 +42,20 @@ export const documentAPI = {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
   list: (subCriterion = 'All', validationStatus = 'All') => api.get(`/documents?sub_criterion=${subCriterion}&validation_status=${validationStatus}`),
+  getValidationSummary: (id) => api.get(`/documents/${id}/validation-summary`),
   validateHod: (id) => api.post(`/documents/${id}/validate-hod`),
   rejectHod: (id, rejection_reason) => api.post(`/documents/${id}/reject-hod`, { rejection_reason }),
+  requestRevisionHod: (id, rejection_reason) => api.post(`/documents/${id}/request-revision-hod`, { rejection_reason }),
   validatePrincipal: (id) => api.post(`/documents/${id}/validate-principal`),
   rejectPrincipal: (id, rejection_reason) => api.post(`/documents/${id}/reject-principal`, { rejection_reason }),
+  requestRevisionPrincipal: (id, rejection_reason) => api.post(`/documents/${id}/request-revision-principal`, { rejection_reason }),
   delete: (id) => api.delete(`/documents/${id}`),
-  searchRag: (query, subCriterion = 'All') => api.post('/documents/search', { query, sub_criterion: subCriterion }),
+  searchRag: (query, subCriterion = 'All', docId = null) => api.post('/documents/rag-query', { query, sub_criterion: subCriterion, doc_id: docId }),
+};
+
+export const notificationAPI = {
+  getNotifications: () => api.get('/notifications'),
+  markAllRead: () => api.post('/notifications/mark-read'),
 };
 
 

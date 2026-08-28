@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
-import { ShieldCheck, Search, LogOut, Sparkles, Inbox, ShieldAlert, ToggleLeft, ToggleRight } from 'lucide-react';
+import NotificationBell from './NotificationBell';
 import api from '../services/api';
 
 const Navbar = ({ onOpenSearch, isDemoMode, onToggleDemoMode }) => {
@@ -81,6 +81,9 @@ const Navbar = ({ onOpenSearch, isDemoMode, onToggleDemoMode }) => {
           <ShieldAlert className="w-4 h-4 text-indigo-600" />
           <span className="hidden md:inline">Trust Center</span>
         </Link>
+
+        {/* Dynamic Role-Based Notification & Action Alert Bell */}
+        <NotificationBell />
 
         {/* Accreditation Inbox Button */}
         <Link

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Inbox, CheckCircle2, AlertCircle, Clock, ArrowRight, ShieldCheck, Mail, RefreshCw, Send, Plus, Trash2, X, User, CornerUpLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api, { authAPI } from '../services/api';
+import PrincipalValidationModal from '../components/PrincipalValidationModal';
 
 const ComposeMailModal = ({ isOpen, onClose, onSent }) => {
   const { user } = useAuth();
@@ -167,6 +168,7 @@ const AccreditationInboxPage = () => {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState(null);
+  const [inboxReviewDocId, setInboxReviewDocId] = useState(null);
 
   const fetchInbox = async () => {
     setLoading(true);
@@ -411,15 +413,25 @@ const AccreditationInboxPage = () => {
               </div>
 
               {selectedMessage.target_type && (
-                <div className="pt-2">
+                <div className="pt-2 space-y-2">
+                  {['Principal', 'Administrator'].includes(user?.role) && selectedMessage.target_type === 'Document' && selectedMessage.target_id && (
+                    <button
+                      onClick={() => setInboxReviewDocId(parseInt(selectedMessage.target_id))}
+                      className="w-full py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-purple-200" />
+                      <span>Review Evidence & Validate (Principal Review)</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => {
                       if (selectedMessage.target_type === 'Document') navigate('/documents');
                       else if (selectedMessage.target_type === 'Gap' || selectedMessage.target_type === 'Metric') navigate('/gaps-recommendations');
                     }}
-                    className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
+                    className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all border border-slate-200 flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <span>View Target {selectedMessage.target_type}</span>
+                    <span>Go to {selectedMessage.target_type} Vault</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -434,6 +446,15 @@ const AccreditationInboxPage = () => {
           )}
         </div>
       </div>
+
+      {/* Principal Evidence Review Modal from Inbox */}
+      {inboxReviewDocId && (
+        <PrincipalValidationModal
+          docId={inboxReviewDocId}
+          onClose={() => setInboxReviewDocId(null)}
+          onSuccess={fetchInbox}
+        />
+      )}
     </div>
   );
 };
