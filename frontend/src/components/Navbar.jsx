@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import NotificationBell from './NotificationBell';
 import api from '../services/api';
+import { ShieldCheck, Sparkles, ToggleRight, ToggleLeft, ShieldAlert, Inbox, Search, LogOut } from 'lucide-react';
 
 const Navbar = ({ onOpenSearch, isDemoMode, onToggleDemoMode }) => {
   const { user, logout } = useAuth();
