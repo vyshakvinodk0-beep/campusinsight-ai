@@ -25,11 +25,13 @@ const DocumentUploader = ({ onUploadSuccess }) => {
 
           if (updated.processing_stage === 'Completed' || updated.status === 'Processed') {
             setMessage(`Successfully processed '${updated.filename}' (${updated.page_count} pages). ${updated.text_pages_count} Text pages, ${updated.ocr_pages_count} OCR pages. Indexed into FAISS vector store.`);
+            setError(null); // Clear any stale error when processing succeeds
             setUploadedDoc(updated);
             if (onUploadSuccess) onUploadSuccess(updated);
             clearInterval(timer);
           } else if (updated.status === 'Failed' || updated.processing_stage === 'Failed') {
             setError(`Document processing error: ${updated.rejection_reason || 'Pipeline failed'}`);
+            setMessage(null); // Clear success message if processing failed
             clearInterval(timer);
           }
         } catch (err) {
@@ -49,6 +51,11 @@ const DocumentUploader = ({ onUploadSuccess }) => {
       setDuplicatePrompt(null);
       setActiveDocStatus(null);
     }
+  };
+
+  const handleRetryDownload = () => {
+    setError(null);
+    handleDownloadUploadedDocReport();
   };
 
   const handleUpload = async (e, forceDuplicate = false) => {
@@ -313,7 +320,7 @@ const DocumentUploader = ({ onUploadSuccess }) => {
             <span className="font-semibold">{message}</span>
           </div>
           {uploadedDoc && (
-            <div className="pt-1">
+            <div className="pt-1 flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={handleDownloadUploadedDocReport}
@@ -364,9 +371,22 @@ const DocumentUploader = ({ onUploadSuccess }) => {
       )}
 
       {error && (
-        <div className="mt-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-center space-x-2">
-          <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-          <span>{error}</span>
+        <div className="mt-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-start justify-between gap-2">
+          <div className="flex items-start space-x-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+            <span>{error}</span>
+          </div>
+          {uploadedDoc && error.toLowerCase().includes('pdf report') && (
+            <button
+              type="button"
+              onClick={handleRetryDownload}
+              disabled={downloadingReport}
+              className="shrink-0 px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+            >
+              {downloadingReport ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+              Retry
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -1,7 +1,10 @@
 import os
+import logging
 import shutil
 from datetime import datetime
-from typing import List, Optional
+
+logger = logging.getLogger(__name__)
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.core.database import get_db, SessionLocal
@@ -17,7 +20,32 @@ from app.agents.workflow import langgraph_agent_pipeline
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
-def process_ai_pipeline_results(doc: Document, final_state: dict, db: Session):
+def extract_institution_name_from_text(text: str, filename: str) -> str:
+    if not text:
+        return "Not reliably identified from document"
+    import re
+    header_text = text[:4000]
+    
+    # Check for explicit HEI or SSR title patterns
+    patterns = [
+        r"(?:Sagar Institute of Research\s*(?:&|and)\s*Technology[,\s]*Bhopal)",
+        r"(?:Vimal Jyothi Engineering College[,\s]*Chemperi)",
+        r"(?:Name of the (?:Institution|HEI))[:\s]+([A-Za-z0-9\s,&'.\(\)]+)",
+        r"([A-Z][A-Za-z\s,&']+(?:Institute|College|University|Academy|Technology|Engineering|Polytechnic)[A-Za-z\s,&']*)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, header_text, re.IGNORECASE)
+        if match:
+            candidate = match.group(0 if pattern.startswith("(?:Sagar") or pattern.startswith("(?:Vimal") else 1).strip()
+            candidate = candidate.split('\n')[0].strip()
+            if len(candidate) > 8 and len(candidate) < 120:
+                candidate = re.sub(r'^(SELF STUDY REPORT|NAAC|ACCREDITATION|CRITERION\s*\d+)\s*[-:]*\s*', '', candidate, flags=re.IGNORECASE).strip()
+                if candidate:
+                    return candidate
+
+    return "Not reliably identified from document"
+
+def process_ai_pipeline_results(doc: Document, final_state: Dict[str, Any], db: Session):
     """
     Persists all artifacts produced by the 6-Agent LangGraph AI Pipeline:
     - Extracted Evidence Items with page-level citations
@@ -49,6 +77,10 @@ def process_ai_pipeline_results(doc: Document, final_state: dict, db: Session):
                 page_number=ev_data.get("page_number", 1),
                 confidence=ev_data.get("confidence", 90.0),
                 relevance_status=ev_data.get("relevance_status", "Relevant"),
+                evidence_status=ev_data.get("evidence_status", "FOUND"),
+                claim_status=ev_data.get("claim_status", "FOUND"),
+                supporting_doc_status=ev_data.get("supporting_doc_status", "NOT_VERIFIED"),
+                source_filename=doc.original_name,
                 verification_notes=ev_data.get("verification_notes", f"Extracted from {doc.original_name}")
             )
             db.add(db_ev)
@@ -93,7 +125,14 @@ def process_ai_pipeline_results(doc: Document, final_state: dict, db: Session):
                 severity=gap_data.get("severity", "Medium"),
                 status="Open",
                 missing_evidence=gap_data.get("missing_evidence"),
-                recommended_action=gap_data.get("recommended_action")
+                recommended_action=gap_data.get("recommended_action"),
+                evidence_status=gap_data.get("evidence_status", "NOT_VERIFIED"),
+                claim_status=gap_data.get("claim_status", "FOUND"),
+                supporting_doc_status=gap_data.get("supporting_doc_status", "NOT_VERIFIED"),
+                why_flagged_reason=gap_data.get("why_flagged_reason", gap_data.get("description")),
+                priority_reason=gap_data.get("priority_reason"),
+                source_document_id=doc.id,
+                source_page_numbers=str(gap_data.get("source_page_numbers", gap_data.get("page_number", 1)))
             )
             db.add(db_gap)
 
@@ -106,11 +145,23 @@ def process_ai_pipeline_results(doc: Document, final_state: dict, db: Session):
             RecommendationItem.title == rec_title
         ).first()
         if not existing_rec:
+            pages_val = rec_data.get("source_page_numbers", rec_data.get("page_number"))
+            pages_str = str(pages_val).strip() if pages_val and str(pages_val).strip() not in ["None", "0"] else "Not verified"
             db_rec = RecommendationItem(
                 sub_criterion=rec_data.get("sub_criterion", doc.sub_criterion),
+                category=rec_data.get("category", "EVIDENCE_BASED"),
                 title=rec_title,
                 recommendation_text=rec_data.get("recommendation_text", ""),
                 priority=rec_data.get("priority", "Medium"),
+                evidence_status=rec_data.get("evidence_status", "NOT_VERIFIED"),
+                claim_status=rec_data.get("claim_status", "FOUND"),
+                supporting_doc_status=rec_data.get("supporting_doc_status", "NOT_VERIFIED"),
+                required_document=rec_data.get("required_document", rec_data.get("missing_evidence")),
+                responsible_role=rec_data.get("responsible_role", "Faculty / HOD"),
+                why_flagged_reason=rec_data.get("why_flagged_reason"),
+                priority_reason=rec_data.get("priority_reason"),
+                source_document_id=doc.id,
+                source_page_numbers=pages_str,
                 shap_explanation_json=rec_data.get("shap_explanation_json"),
                 action_items=rec_data.get("action_items")
             )
@@ -245,6 +296,7 @@ def process_document_background_task(doc_id: int):
         doc.ocr_quality_score = quality_metrics.get("ocr_quality_score", 90.0)
         doc.readability_score = quality_metrics.get("readability_score", 92.0)
         doc.is_scanned_pdf = ocr_pages_count > 0
+        doc.institution_name = extract_institution_name_from_text(extracted_text, doc.filename)
 
         # 2. Section & Page-aware Chunking
         chunks_meta = DocumentExtractorService.create_page_aware_chunks(

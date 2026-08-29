@@ -51,6 +51,7 @@ class Document(Base):
     version = Column(Integer, default=1)
     version_status = Column(String, default="Current") # Current, Superseded, Archived, Invalid
     academic_year = Column(String, default="2024-25")
+    institution_name = Column(String, nullable=True)
 
     # Large Document (0-600 Pages) Incremental Processing & Progress Tracking
     page_count = Column(Integer, default=0)
@@ -95,6 +96,10 @@ class EvidenceItem(Base):
     page_number = Column(Integer, default=1)
     confidence = Column(Float, default=90.0)
     relevance_status = Column(String, default="Relevant") # Relevant, Partial, Irrelevant
+    evidence_status = Column(String, default="FOUND") # FOUND, PARTIALLY_VERIFIED, NOT_VERIFIED, MISSING_FROM_UPLOADED_EVIDENCE, CONFLICTING, INSUFFICIENT_EVIDENCE
+    claim_status = Column(String, default="FOUND")
+    supporting_doc_status = Column(String, default="NOT_VERIFIED")
+    source_filename = Column(String, nullable=True)
     verification_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -151,6 +156,13 @@ class GapItem(Base):
     status = Column(String, default="Open") # Open, Pending, Resolved
     missing_evidence = Column(String, nullable=True)
     recommended_action = Column(Text, nullable=True)
+    evidence_status = Column(String, default="NOT_VERIFIED")
+    claim_status = Column(String, default="FOUND")
+    supporting_doc_status = Column(String, default="NOT_VERIFIED")
+    why_flagged_reason = Column(Text, nullable=True)
+    priority_reason = Column(Text, nullable=True)
+    source_document_id = Column(Integer, nullable=True)
+    source_page_numbers = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class RecommendationItem(Base):
@@ -161,6 +173,17 @@ class RecommendationItem(Base):
     title = Column(String, nullable=False)
     recommendation_text = Column(Text, nullable=False)
     priority = Column(String, default="High") # High, Medium, Low
+    gap_id = Column(Integer, nullable=True)
+    evidence_status = Column(String, default="NOT_VERIFIED")
+    claim_status = Column(String, default="FOUND")
+    supporting_doc_status = Column(String, default="NOT_VERIFIED")
+    category = Column(String, default="EVIDENCE_BASED") # EVIDENCE_BASED or GENERAL_BEST_PRACTICE
+    required_document = Column(String, nullable=True)
+    responsible_role = Column(String, default="Faculty / HOD")
+    why_flagged_reason = Column(Text, nullable=True)
+    priority_reason = Column(Text, nullable=True)
+    source_document_id = Column(Integer, nullable=True)
+    source_page_numbers = Column(String, nullable=True)
     shap_explanation_json = Column(JSON, nullable=True) # { feature_importance: {...}, base_value: float, shap_values: [...] }
     action_items = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

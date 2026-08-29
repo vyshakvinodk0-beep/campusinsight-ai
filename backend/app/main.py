@@ -28,10 +28,56 @@ with engine.connect() as conn:
         "is_scanned_pdf BOOLEAN DEFAULT 0",
         "version INTEGER DEFAULT 1",
         "version_status VARCHAR DEFAULT 'Current'",
-        "academic_year VARCHAR DEFAULT '2024-25'"
+        "academic_year VARCHAR DEFAULT '2024-25'",
+        "institution_name VARCHAR"
     ]:
         try:
             conn.execute(text(f"ALTER TABLE documents ADD COLUMN {col_def}"))
+            conn.commit()
+        except Exception:
+            pass
+
+    for col_def in [
+        "evidence_status VARCHAR DEFAULT 'FOUND'",
+        "claim_status VARCHAR DEFAULT 'FOUND'",
+        "supporting_doc_status VARCHAR DEFAULT 'NOT_VERIFIED'",
+        "source_filename VARCHAR"
+    ]:
+        try:
+            conn.execute(text(f"ALTER TABLE evidence_items ADD COLUMN {col_def}"))
+            conn.commit()
+        except Exception:
+            pass
+
+    for col_def in [
+        "evidence_status VARCHAR DEFAULT 'NOT_VERIFIED'",
+        "claim_status VARCHAR DEFAULT 'FOUND'",
+        "supporting_doc_status VARCHAR DEFAULT 'NOT_VERIFIED'",
+        "why_flagged_reason TEXT",
+        "priority_reason TEXT",
+        "source_document_id INTEGER",
+        "source_page_numbers VARCHAR"
+    ]:
+        try:
+            conn.execute(text(f"ALTER TABLE gap_items ADD COLUMN {col_def}"))
+            conn.commit()
+        except Exception:
+            pass
+
+    for col_def in [
+        "gap_id INTEGER",
+        "evidence_status VARCHAR DEFAULT 'NOT_VERIFIED'",
+        "claim_status VARCHAR DEFAULT 'FOUND'",
+        "supporting_doc_status VARCHAR DEFAULT 'NOT_VERIFIED'",
+        "required_document VARCHAR",
+        "responsible_role VARCHAR DEFAULT 'Faculty / HOD'",
+        "why_flagged_reason TEXT",
+        "priority_reason TEXT",
+        "source_document_id INTEGER",
+        "source_page_numbers VARCHAR"
+    ]:
+        try:
+            conn.execute(text(f"ALTER TABLE recommendation_items ADD COLUMN {col_def}"))
             conn.commit()
         except Exception:
             pass

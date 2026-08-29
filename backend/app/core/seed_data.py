@@ -256,30 +256,45 @@ def seed_database(db: Session):
     gaps_data = [
         {
             "sub_criterion": "1.1",
-            "title": "Missing Direct CO-PO Attainment Calculation Sheets",
-            "description": "While PO-CO alignment matrices are present in syllabus copies, automated direct/indirect attainment calculation spreadsheets for 2023-24 are unverified.",
+            "title": "PO-PSO-CO Articulation Matrix — Verification Required",
+            "description": "The SSR reports that Course Outcomes (CO) are mapped to Programme Outcomes (PO) and Programme Specific Outcomes (PSO). The reported practice is therefore not classified as missing. However, the underlying approved/signed mapping matrix should be verified as supporting evidence for peer-team audit readiness.",
             "severity": "Medium",
             "status": "Open",
-            "missing_evidence": "CO-PO Attainment Summary Reports 2023-24",
-            "recommended_action": "Upload course outcome attainment reports signed by Course Coordinators and HOD."
+            "missing_evidence": "Approved/Signed Department CO-PO-PSO Articulation Matrix",
+            "recommended_action": "Verify and upload the approved/signed CO-PO-PSO articulation matrix if it is not already available in the institutional evidence repository.",
+            "evidence_status": "PARTIALLY_VERIFIED",
+            "claim_status": "FOUND",
+            "supporting_doc_status": "NOT_VERIFIED",
+            "why_flagged_reason": "SSR explicitly reports CO-PO-PSO mapping and attainment process. Verification of signed underlying matrix recommended for peer-team audit readiness.",
+            "priority_reason": "The institutional practice is reported, but supporting documentation requires verification for 100% audit readiness."
         },
         {
             "sub_criterion": "1.2",
-            "title": "Incomplete Record of Credit Transfers for NPTEL/MOOCs",
-            "description": "List of students who successfully completed NPTEL credit transfers is missing grade card verification signatures from Dean Academics.",
-            "severity": "Low",
+            "title": "BOS Resolution Verification for Elective Courses",
+            "description": "The SSR references Choice Based Credit System (CBCS) and elective options. Departmental Board of Studies (BOS) resolutions for elective course codes should be verified as supporting evidence.",
+            "severity": "Medium",
             "status": "Open",
-            "missing_evidence": "Signed MOOC Credit Transfer Equivalence Certificates",
-            "recommended_action": "Compile and upload official NPTEL/SWAYAM credit transfer approvals signed by Dean Academics."
+            "missing_evidence": "Verified BOS Resolutions & Student Elective Enrollment Lists",
+            "recommended_action": "Verify that approved Board of Studies (BOS) minutes confirming elective course offerings are available in the institutional evidence repository.",
+            "evidence_status": "PARTIALLY_VERIFIED",
+            "claim_status": "FOUND",
+            "supporting_doc_status": "NOT_VERIFIED",
+            "why_flagged_reason": "CBCS/Elective structure reported in document. Specific signed BOS resolution minutes pending independent verification.",
+            "priority_reason": "The institutional practice is reported, but supporting documentation requires verification to confirm elective course approvals."
         },
         {
             "sub_criterion": "1.4",
-            "title": "Unsigned Employer Action Taken Report (ATR)",
-            "description": "Employer feedback indicates request for AI/Cloud skills. The corresponding Action Taken Report (ATR) lacks formal Academic Council ratification signature.",
+            "title": "Action Taken Report (ATR) Approval Verification",
+            "description": "Stakeholder feedback collection and website disclosure are documented in the SSR. The signed Action Taken Report (ATR) ratified by the Academic Council should be verified.",
             "severity": "High",
             "status": "Open",
-            "missing_evidence": "Academic Council Approved Action Taken Report",
-            "recommended_action": "Present Employer Feedback ATR to Academic Council and upload signed resolution copy."
+            "missing_evidence": "Signed 4-Stakeholder Action Taken Report (ATR) & Website Link",
+            "recommended_action": "Verify that the signed 4-stakeholder Action Taken Report (ATR) and active website URL are available in the institutional evidence repository.",
+            "evidence_status": "PARTIALLY_VERIFIED",
+            "claim_status": "FOUND",
+            "supporting_doc_status": "NOT_VERIFIED",
+            "why_flagged_reason": "4-stakeholder feedback collection system active. Signed ATR document with Academic Council minute approval recommended for audit readiness.",
+            "priority_reason": "Mandatory NAAC requirement for 1.4.1 and 1.4.2 audit verification."
         }
     ]
 
@@ -294,21 +309,36 @@ def seed_database(db: Session):
     recs_data = [
         {
             "sub_criterion": "1.1",
-            "title": "Publish Standardized PO-CO Attainment Protocol",
-            "recommendation_text": "Establish a standardized digital template for calculating direct (Internal/End-Sem Exams) and indirect (Course Exit Surveys) CO attainment to boost Metric 1.1.1 readiness score.",
-            "priority": "High",
+            "category": "EVIDENCE_BASED",
+            "title": "Recommendation: PO-PSO-CO Articulation Matrix — Verification Required",
+            "recommendation_text": "Verify and upload the approved/signed CO-PO-PSO articulation matrix if it is not already available in the institutional evidence repository.",
+            "priority": "Medium",
+            "evidence_status": "PARTIALLY_VERIFIED",
+            "claim_status": "FOUND",
+            "supporting_doc_status": "NOT_VERIFIED",
+            "required_document": "Approved/Signed Department CO-PO-PSO Articulation Matrix",
+            "responsible_role": "Faculty / HOD",
+            "why_flagged_reason": "SSR explicitly reports CO-PO-PSO mapping. Verification of underlying matrix recommended for peer-team audit readiness.",
+            "priority_reason": "The institutional practice is reported, but supporting documentation requires verification for 100% audit readiness.",
             "shap_explanation_json": shap_service.explain_sub_criterion_score("1.1", {"PO_CO_Mapping_Density": 8.5, "Curriculum_Revision_Recency": 8.0}),
             "action_items": [
-                "Deploy institutional CO-PO calculation template across all departments.",
-                "Conduct faculty workshop on Bloom's Taxonomy CO formulation.",
-                "Submit sample attainment files for NAAC peer team review."
+                "Verify signed CO-PO-PSO articulation matrix in departmental repository.",
+                "Upload signed matrix copy to CampusInsight Vault."
             ]
         },
         {
             "sub_criterion": "1.4",
-            "title": "Formalize Employer & Alumni Feedback Action Loop",
-            "recommendation_text": "Close the feedback loop by publishing a bi-annual Action Taken Report (ATR) explicitly detailing how stakeholder input influenced curriculum revisions.",
+            "category": "EVIDENCE_BASED",
+            "title": "Recommendation: Action Taken Report (ATR) Approval Verification",
+            "recommendation_text": "Verify that the signed 4-stakeholder Action Taken Report (ATR) and active website URL are available in the institutional evidence repository.",
             "priority": "High",
+            "evidence_status": "PARTIALLY_VERIFIED",
+            "claim_status": "FOUND",
+            "supporting_doc_status": "NOT_VERIFIED",
+            "required_document": "Signed 4-Stakeholder Action Taken Report (ATR)",
+            "responsible_role": "IQAC Director / Principal / HOD",
+            "why_flagged_reason": "Stakeholder feedback collected but signed ATR requires Academic Council verification.",
+            "priority_reason": "Mandatory NAAC requirement for 1.4.1 and 1.4.2 audit verification.",
             "shap_explanation_json": shap_service.explain_sub_criterion_score("1.4", {"Stakeholder_Feedback_Coverage": 9.5, "ATR_Action_Taken_Completeness": 6.0}),
             "action_items": [
                 "Schedule Academic Council meeting for ATR approval.",

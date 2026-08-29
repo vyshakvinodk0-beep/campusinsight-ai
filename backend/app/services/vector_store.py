@@ -130,7 +130,6 @@ class FAISSVectorStoreService:
                 )
             ]
             if not filtered_candidates:
-                # Fallback: ignore sub_criterion filter if strict match gave 0
                 filtered_candidates = [
                     (idx, item) for idx, item in enumerate(self.documents_metadata)
                     if item.get("doc_id") == doc_id
@@ -147,17 +146,26 @@ class FAISSVectorStoreService:
             elif dim > 512:
                 query_vec = query_vec[:, :512]
 
-            # Compute similarity directly for candidate indices
             cand_indices = [c[0] for c in filtered_candidates]
             cand_items = [c[1] for c in filtered_candidates]
             
             if self.index is not None and self.index.ntotal > max(cand_indices):
-                # Calculate distances for candidate vectors
                 cand_vectors = np.array([self.index.reconstruct(i) for i in cand_indices], dtype='float32')
-                # L2 distance
                 dists = np.linalg.norm(cand_vectors - query_vec, axis=1)
                 sorted_pairs = sorted(zip(dists, cand_items), key=lambda x: x[0])
-                return [item for _, item in sorted_pairs[:top_k]]
+                
+                # Separate TOC/indexing pages from substantive text pages
+                substantive_items = []
+                toc_items = []
+                for _, item in sorted_pairs:
+                    txt = item.get("text", "")
+                    if "......" in txt or "Table of Contents" in txt or "INDEX" in txt[:50].upper():
+                        toc_items.append(item)
+                    else:
+                        substantive_items.append(item)
+                
+                ordered_results = substantive_items + toc_items
+                return ordered_results[:top_k]
             else:
                 return cand_items[:top_k]
 
@@ -173,14 +181,28 @@ class FAISSVectorStoreService:
         distances, indices = self.index.search(query_vec, k)
 
         results = []
+        toc_results = []
         for idx in indices[0]:
             if 0 <= idx < len(self.documents_metadata):
                 item = self.documents_metadata[idx]
                 if sub_criterion == "All" or item["sub_criterion"] == sub_criterion or item["sub_criterion"] == "General":
-                    results.append(item)
+                    txt = item.get("text", "")
+                    if "......" in txt or "Table of Contents" in txt:
+                        toc_results.append(item)
+                    else:
+                        results.append(item)
                     if len(results) >= top_k:
                         break
-        return results
+
+        final_list = results if results else toc_results
+        if len(final_list) < top_k and toc_results:
+            for item in toc_results:
+                if item not in final_list:
+                    final_list.append(item)
+                if len(final_list) >= top_k:
+                    break
+
+        return final_list[:top_k]
 
     def clear(self):
         self._reset_index()

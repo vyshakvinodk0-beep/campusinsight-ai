@@ -18,6 +18,8 @@ def _generate_pdf_response(institution: str, document_id: Optional[int], db: Ses
         if not doc:
             raise HTTPException(status_code=404, detail=f"Document #{document_id} not found in system database. Please select a valid document or Full Portfolio.")
         evidence_items = db.query(EvidenceItem).filter(EvidenceItem.document_id == document_id).all()
+        if doc.institution_name and doc.institution_name != "Not reliably identified from document":
+            institution = doc.institution_name
 
     analyses = db.query(CriterionAnalysis).all()
     
